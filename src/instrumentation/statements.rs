@@ -1,11 +1,9 @@
 use rustc_ast as ast;
 use rustc_ast::mut_visit::{self, MutVisitor};
 
-use rustc_parse::{
-    lexer::StripTokens, new_parser_from_source_str
-};
+use rustc_parse::{lexer::StripTokens, new_parser_from_source_str};
 use rustc_session::parse::ParseSess;
-use rustc_span::{FileName};
+use rustc_span::FileName;
 
 pub struct ATIVisitor<'psess> {
     psess: &'psess ParseSess,
@@ -13,11 +11,7 @@ pub struct ATIVisitor<'psess> {
 
 impl<'psess> MutVisitor for ATIVisitor<'psess> {
     fn visit_item(&mut self, item: &mut ast::Item) {
-        if let ast::ItemKind::Fn(box ast::Fn {
-            ref mut body,
-            ..
-        }) = item.kind
-        {
+        if let ast::ItemKind::Fn(box ast::Fn { ref mut body, .. }) = item.kind {
             if let Some(block) = body {
                 let print_stmt = self.create_print_statement();
 
@@ -67,9 +61,7 @@ impl<'psess> ATIVisitor<'psess> {
         .unwrap();
 
         match parser.parse_block() {
-            Ok(block) => {
-                block.stmts.into_iter().collect()
-            },
+            Ok(block) => block.stmts.into_iter().collect(),
             Err(diag) => {
                 diag.emit();
                 panic!("Failed to parse code block");
