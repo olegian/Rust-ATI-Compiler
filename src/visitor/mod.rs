@@ -60,7 +60,7 @@ impl<'psess> ATIVisitor<'psess> {
         let block = format!("{{ {} }}", code);
         let mut parser = new_parser_from_source_str(
             self.psess,
-            FileName::anon_source_code(code),
+            FileName::anon_source_code(&block),
             block,
             StripTokens::Nothing,
         )
