@@ -5,18 +5,38 @@ use rustc_parse::{lexer::StripTokens, new_parser_from_source_str};
 use rustc_session::parse::ParseSess;
 use rustc_span::FileName;
 
+use crate::instrumentation::common;
+
 pub struct ATIVisitor<'psess> {
     psess: &'psess ParseSess,
 }
 
 impl<'psess> MutVisitor for ATIVisitor<'psess> {
     fn visit_item(&mut self, item: &mut ast::Item) {
-        if let ast::ItemKind::Fn(box ast::Fn { ref mut body, .. }) = item.kind {
+        // println!("{:?}", item);
+        if let ast::ItemKind::Fn(box ast::Fn { ref mut body, ref ident, .. }) = item.kind {
             if let Some(block) = body {
-                let print_stmt = self.create_print_statement();
-
-                for (i, stmt) in print_stmt.into_iter().enumerate() {
-                    block.stmts.insert(i, stmt);
+                if !common::is_function_skipped(ident, &item.attrs) {
+                    // params used by this wont be available in skipped functions
+                    let print_stmts = self.create_print_statement();
+                    for (i, stmt) in print_stmts.into_iter().enumerate() {
+                        block.stmts.insert(i, stmt);
+                    }
+                    
+                    // TODO: on next rewrite change above functions to accepts &mut stmts and
+                    //       directly modify
+                    let prelude = self.create_prelude();
+                    let epilogue = self.create_epilogue();
+                    
+                    // TODO: figure out a better way of doing this kind of fenceposting
+                    for (i, stmt) in prelude.into_iter().enumerate() {
+                        block.stmts.insert(i, stmt);
+                    }
+                    
+                    let len = block.stmts.len();
+                    for (i, stmt) in epilogue.into_iter().enumerate() {
+                        block.stmts.insert(len + i, stmt);
+                    }
                 }
             }
         }
@@ -32,18 +52,24 @@ impl<'psess> ATIVisitor<'psess> {
 
     fn create_print_statement(&self) -> Vec<ast::Stmt> {
         let code = r#"
-            println!("AAAAAA");
-            println!("BBBBBB");
+            println!("From compiler: {}", added_by_compiler);
         "#;
-        self.parse_code(&code)
+        self.parse_code(code)
     }
 
-    fn create_prelude() -> ast::Stmt {
-        todo!();
+    fn create_prelude(&self) -> Vec<ast::Stmt> {
+        let code = r#"
+            let a: u32 = 10;
+            let t = Tag::new(&a);
+        "#;
+        self.parse_code(code)
     }
 
-    fn create_epilogue() -> ast::Stmt {
-        todo!();
+    fn create_epilogue(&self) -> Vec<ast::Stmt> {
+        let code = r#"
+            println!("{:?}", t);
+        "#;
+        self.parse_code(code)
     }
 
     fn create_var_bind() -> ast::Stmt {

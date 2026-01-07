@@ -1,7 +1,8 @@
+pub mod params;
 pub mod statements;
 pub mod types;
-pub mod params;
+mod common;
 
+pub use params::*;
 pub use statements::*;
 pub use types::*;
-pub use params::*;

@@ -19,7 +19,7 @@ use rustc_middle::ty::TyCtxt;
 use std::{env, path::Path};
 
 mod instrumentation;
-use crate::instrumentation::{ATIVisitor, get_types_in};
+use crate::instrumentation::{ATIVisitor, ModifyParamsVisitor, UpdateInvocationsVisitor, get_types_in};
 
 struct Callbacks {}
 impl rustc_driver::Callbacks for Callbacks {
@@ -37,7 +37,7 @@ impl rustc_driver::Callbacks for Callbacks {
         // add required ATI types to crate
         let items = get_types_in(
             &compiler.sess.psess,
-            // todo: reference this file in a better way
+            // TODO: reference this file in a better way
             Path::new("/home/olegian/TRACTOR/queries/src/ati/ati.rs"),
         );
         for (i, item) in items.enumerate() {
@@ -45,8 +45,13 @@ impl rustc_driver::Callbacks for Callbacks {
         }
 
         // double formals for tags, and also pass around ATI struct between functions
+        let mut modify_params_visitor = ModifyParamsVisitor::new(&compiler.sess.psess);
+        modify_params_visitor.visit_crate(krate);
 
-        
+        let modified_funcs = modify_params_visitor.get_modified_funcs();
+        let mut update_invocations_visitor = UpdateInvocationsVisitor::new(modified_funcs);
+        update_invocations_visitor.visit_crate(krate);
+
         // mutate each function body to add preludes, epilogues, and unifications
         let mut visitor = ATIVisitor::new(&compiler.sess.psess);
         visitor.visit_crate(krate);
