@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use rustc_ast as ast;
-use rustc_ast::token;
 use rustc_ast::mut_visit::{self, MutVisitor};
+use rustc_ast::token;
 use rustc_parse::lexer::StripTokens;
 use rustc_parse::new_parser_from_source_str;
 use rustc_session::parse::ParseSess;
@@ -28,13 +28,13 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
                 if !common::is_function_skipped(ident, &item.attrs) {
                     // TODO: not sure if this works with complex function invocations
                     // that use some mod::submod::func_name() thing, might need to preserve
-                    // the entire path as an identifier of the function, and use that in 
+                    // the entire path as an identifier of the function, and use that in
                     // the modified_functions set.
                     self.modified_functions.insert(*ident);
 
                     self.push_param(&mut sig.decl, "added_by_compiler", "u32");
                 }
-            },
+            }
 
             _ => {}
         }
@@ -45,7 +45,7 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
 
 impl<'a> ModifyParamsVisitor<'a> {
     pub fn new(psess: &'a ParseSess) -> Self {
-        Self { 
+        Self {
             psess,
             modified_functions: HashSet::new(),
         }
@@ -105,22 +105,19 @@ impl<'a> ModifyParamsVisitor<'a> {
     }
 }
 
-
 pub struct UpdateInvocationsVisitor<'a> {
     // functions which ModifyParamVisitor modified to include the extra params
     modified_functions: &'a HashSet<Ident>,
 }
 
-
 impl<'a> MutVisitor for UpdateInvocationsVisitor<'a> {
     /// adds extra parameter to each function invocation which isn't skipped
     fn visit_expr(&mut self, expr: &mut ast::Expr) {
-        // Check if this is a function call expression
         if let ast::ExprKind::Call(ref func, ref mut args) = expr.kind {
             if let ast::ExprKind::Path(None, path) = &func.kind {
                 // TODO: not sure if this works with complex function invocations
                 // that use some mod::submod::func_name() thing, might need to preserve
-                // the entire path as an identifier of the function, and use that in 
+                // the entire path as an identifier of the function, and use that in
                 // the modified_functions set.
                 if let Some(last_segment) = path.segments.last() {
                     if self.modified_functions.contains(&last_segment.ident) {
@@ -130,24 +127,22 @@ impl<'a> MutVisitor for UpdateInvocationsVisitor<'a> {
                 }
             }
         }
-        
-        // Continue visiting nested expressions
+
+        // continue visiting nested expressions
         mut_visit::walk_expr(self, expr);
     }
 }
 
 impl<'a> UpdateInvocationsVisitor<'a> {
     pub fn new(modified_functions: &'a HashSet<Ident>) -> Self {
-        Self { 
-            modified_functions,
-        }
+        Self { modified_functions }
     }
 
     /// Parse a type string into an ast::Ty
     fn create_arg(&self) -> Box<ast::Expr> {
         // technically, we will be passing a variable so...
         // let ident = Ident::new(Symbol::intern("var_name"), DUMMY_SP);
-        
+
         // Box::new(ast::Expr {
         //     id: ast::DUMMY_NODE_ID,
         //     kind: ast::ExprKind::Path(
@@ -163,7 +158,7 @@ impl<'a> UpdateInvocationsVisitor<'a> {
         Box::new(ast::Expr {
             id: ast::DUMMY_NODE_ID,
             kind: ast::ExprKind::Lit(token::Lit {
-                kind: token::LitKind::Integer,  // specifies literal type
+                kind: token::LitKind::Integer, // specifies literal type
                 symbol: Symbol::intern("100"),
                 suffix: None,
             }),
@@ -173,6 +168,3 @@ impl<'a> UpdateInvocationsVisitor<'a> {
         })
     }
 }
-
-
-

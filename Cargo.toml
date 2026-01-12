@@ -2,6 +2,3 @@
 name = "compiler_queries"
 version = "0.1.0"
 edition = "2024"
-
-[dependencies]
-thin-vec = "0.2.12"

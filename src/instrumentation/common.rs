@@ -1,6 +1,11 @@
 use rustc_ast as ast;
 use rustc_span::Ident;
 
+/// TODO: actually implement this
+pub fn is_function_main(ident: &Ident) -> bool {
+    true
+}
+
 /// Check if we should skip this function
 pub fn is_function_skipped(ident: &Ident, attrs: &[ast::Attribute]) -> bool {
     // Skip main function

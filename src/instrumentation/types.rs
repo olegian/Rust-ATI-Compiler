@@ -8,10 +8,7 @@ use rustc_span::FileName;
 /// enums, and thier associated impl blocks, to be added to the target
 /// program. This is essentially a module import.
 // TODO: should I make this an actual module import?? might lead to slightly cleaner code
-pub fn get_types_in(
-    psess: &ParseSess,
-    file: &std::path::Path,
-) -> impl Iterator<Item = Box<ast::Item>> {
+pub fn define_types_from_file(file: &std::path::Path, psess: &ParseSess, krate: &mut ast::Crate) {
     let code: String = std::fs::read_to_string(file).unwrap();
 
     let mut parser = new_parser_from_source_str(
@@ -36,19 +33,21 @@ pub fn get_types_in(
                     items.push(item);
                 }
             }
-            Ok(None) => break, // No more items
+            Ok(None) => break, // no more items
             Err(diag) => {
                 diag.emit();
                 panic!("Failed to parse item from analysis.rs");
             }
         }
 
-        // TODO: is this necessary?
-        // Check if we've reached EOF
-        if parser.token.kind == rustc_ast::token::TokenKind::Eof {
-            break;
-        }
+        // TODO: is this necessary? not sure if the above Ok(None) catches all EOFs
+        // if parser.token.kind == rustc_ast::token::TokenKind::Eof {
+        //     break;
+        // }
     }
 
-    imports.into_iter().chain(items.into_iter())
+    let items = imports.into_iter().chain(items.into_iter());
+    for (i, item) in items.enumerate() {
+        krate.items.insert(i, item);
+    }
 }
