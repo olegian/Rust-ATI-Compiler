@@ -61,12 +61,7 @@ impl<'psess> MutVisitor for ATIVisitor<'psess> {
     fn visit_expr(&mut self, expr: &mut ast::Expr) {
         mut_visit::walk_expr(self, expr);
 
-        if let ast::ExprKind::Lit(token::Lit {
-            ref kind,
-            ref symbol,
-            ..
-        }) = expr.kind
-        {
+        if let ast::ExprKind::Lit(_) = expr.kind {
             // expression is a literal!
             // convert the expression into a TaggedValue
             *expr = self.tupleify_literal_expr(expr);
