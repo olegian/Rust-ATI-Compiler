@@ -164,7 +164,6 @@ impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
             let mut site = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({func_name}));
         "#
         );
-        println!("{:#?}", params);
         let param_binds: String = params
             .iter()
             .filter(|param| common::is_type_tupled(&param.ty))

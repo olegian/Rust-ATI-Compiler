@@ -1,6 +1,5 @@
-use std::{ops::{Add, Div, Mul, Sub}};
+use std::{collections::{BTreeMap, HashMap}, ops::{Add, Div, Mul, Sub}};
 use std::{sync::{Arc, LazyLock, Mutex}};
-use std::collections::HashMap;
 
 pub type Id = u64;
 
@@ -9,15 +8,18 @@ pub static ATI_ANALYSIS: LazyLock<Arc<Mutex<ATI>>> = LazyLock::new(|| {
 });
 
 // MARK: tag.rs
+/// Generates incrementing tags of type `Id`, with each call to `tag()`
 pub struct Tagger {
     next_id: Id,
 }
 
 impl Tagger {
+    /// Creates a new Tagger
     pub fn new() -> Self {
         Tagger { next_id: 0 }
     }
 
+    /// Fetches the next tag
     pub fn tag(&mut self) -> Id {
         let id = self.next_id;
         self.next_id += 1;
@@ -27,6 +29,15 @@ impl Tagger {
 }
 
 
+/// A tuple of a primative type T, alongside a unique `Id`.
+/// This isn't expected to be created directly, but is instead 
+/// used as a return type from `ATI::track`.
+/// 
+/// Further, this struct implements `std::ops::{Add, Sub, Mul, Div}`, 
+/// alongside Ord, and Eq for less than and comparison,
+/// as long as `T` implements each operator. Whenever two tagged values
+/// are observed interacting through these operators, global `ATI_ANALYSIS`
+/// is updated to record the interaction.
 #[derive(Clone, Copy)]
 pub struct TaggedValue<T: Copy>(pub T, pub Id);
 
@@ -34,15 +45,18 @@ impl<T> TaggedValue<T>
 where
     T: Copy,
 {
+    /// Creates a new TaggedValue, given the parameters
     pub fn new(value: T, id: Id) -> Self {
         Self (value, id)
     }
 
+    /// Copies the value out of the struct
     pub fn unbind(&self) -> T {
         self.0
     }
 }
 
+// Mostly for debugging purposes
 impl<T> std::fmt::Display for TaggedValue<T>
 where
     T: Copy + std::fmt::Display,
@@ -155,23 +169,28 @@ where
 }
 
 // MARK: site.rs
+/// Represents a Site under analysis, ultimately a mapping of in-scope
+/// variables to thier values at the end of each function.
 pub struct Site {
     type_uf: UnionFind,
-    var_tags: HashMap<String, Id>,
+    var_tags: BTreeMap<String, Id>,
     observed_var_tags: Vec<(String, Id)>,
     name: String, // Debug information
 }
 
 impl Site {
+    /// Creates a new empty Site.
     pub fn new(name: &str) -> Self {
         Site {
             type_uf: UnionFind::new(),
-            var_tags: HashMap::new(),
+            var_tags: BTreeMap::new(),
             observed_var_tags: Vec::new(),
             name: name.to_owned(),
         }
     }
 
+    /// Records that a particular `tv: TaggedValue<T>` was passed as a param
+    /// named `var_name` into the current Site.
     pub fn bind_param<T>(&mut self, var_name: &str, tv: &TaggedValue<T>)
     where
         T: Copy,
@@ -179,6 +198,15 @@ impl Site {
         self.observed_var_tags.push((var_name.into(), tv.1));
     }
 
+    /// Records that a particular `tv: TaggedValue<T>` was bound to a variable
+    /// named `var_name`.
+    /// 
+    /// Intended for use whenever a let binding occurs. Essentially, abusing 
+    /// some notation, 1 gets converted to 2.
+    /// ```
+    /// 1. let x = 10;
+    /// 2. let x = site.bind("x", TaggedValue<10>) 
+    /// ```
     pub fn bind<T>(&mut self, var_name: &str, tv: TaggedValue<T>) -> TaggedValue<T>
     where
         T: Copy,
@@ -187,6 +215,7 @@ impl Site {
         tv
     }
 
+    /// Algorithm from paper
     pub fn update(&mut self, value_uf: &mut UnionFind) {
         for (new_var, new_var_tag) in &self.observed_var_tags {
             let new_leader_tag = value_uf.find(new_var_tag).unwrap(); // ? is this unwrap safe? 
@@ -206,6 +235,7 @@ impl Site {
         }
     }
 
+    /// Produces output, called at the end of main.
     pub fn report(&self) {
         println!("=== {} === ", self.name);
         for (var, tag) in self.var_tags.iter() {
@@ -215,6 +245,7 @@ impl Site {
     }
 }
 
+/// Manages multiple Sites at once, to allow for analyzing multiple functions
 pub struct Sites {
     locs: HashMap<String, Site>,
 }
@@ -225,6 +256,7 @@ impl Sites {
         }
     }
 
+    /// Pulls a site out of the global, for local modification
     pub fn extract(&mut self, id: &str) -> Site {
         if !self.locs.contains_key(id) {
             Site::new(id)
@@ -233,10 +265,12 @@ impl Sites {
         }
     }
 
+    /// Puts a site that was locally modified back into the global
     pub fn stash(&mut self, site: Site) {
         self.locs.insert(site.name.clone(), site);
     }
 
+    /// Output results for all analyzed sites.
     pub fn report(&self) {
         for (_, site) in self.locs.iter() {
             site.report();
@@ -245,6 +279,7 @@ impl Sites {
 }
 
 // MARK: union_find.rs
+/// Basic UnionFind implementation, with some light rank optimization.
 pub struct UnionFind {
     id_to_index: HashMap<Id, usize>,
     pub index_to_set: Vec<Id>,
@@ -329,12 +364,14 @@ impl UnionFind {
 }
 
 // MARK: ati.rs
+/// This struct owns all necessary information for analysis.
 pub struct ATI {
     value_uf: UnionFind,
     sites: Sites,
 }
 
 impl ATI {
+    /// Intializes a new global ATI tracker.
     pub fn new() -> Self {
         Self {
             value_uf: UnionFind::new(),
@@ -342,6 +379,8 @@ impl ATI {
         }
     }
 
+    /// Moves a value from a standard type T to a TaggedValue,
+    /// assigning it a unique Id
     pub fn track<T>(
         value: T,
     ) -> TaggedValue<T>
@@ -352,15 +391,18 @@ impl ATI {
         TaggedValue::new(value, id)
     }
 
+    /// Fetches a new site, or creates it, with the given name.
     pub fn get_site(&mut self, id: &str) -> Site {
         self.sites.extract(id)
     }
 
+    /// Introduce current site state into the analysis
     pub fn update_site(&mut self, mut site: Site) {
         site.update(&mut self.value_uf);
         self.sites.stash(site);
     }
 
+    /// Observe two tags interacting
     pub fn union_tags<T>(&mut self, tv1: &TaggedValue<T>, tv2: &TaggedValue<T>)
     where
         T: Copy,

@@ -21,6 +21,9 @@ use std::{env, path::Path};
 mod instrumentation;
 use crate::instrumentation::{ATIVisitor, ModifyParamsVisitor, define_types_from_file};
 
+// included just for code analysis on ati.rs
+mod ati;
+
 // TODO: none of this code right now handles anything but pure functions.
 //       idk what to do with closures, and then associated functions need
 //       extra handling / visiting logic as well.
