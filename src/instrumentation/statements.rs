@@ -1,3 +1,5 @@
+use std::collections::{HashSet};
+
 use rustc_ast as ast;
 use rustc_ast::mut_visit::{self, MutVisitor};
 use rustc_ast::token;
@@ -8,38 +10,40 @@ use rustc_span::{DUMMY_SP, FileName, Ident, Symbol};
 
 use crate::instrumentation::common;
 
-pub struct ATIVisitor<'psess> {
+pub struct ATIVisitor<'psess, 'modfuncs> {
     psess: &'psess ParseSess,
+    // used to determine whether a funtion invocation requires passing a TaggedValue or just the raw value
+    modified_funcs: &'modfuncs HashSet<Ident>,
 }
 
 // TODO: epilogues have to be inserted before all returns, not just at the end of the body
-impl<'psess> MutVisitor for ATIVisitor<'psess> {
+impl<'psess, 'modfuncs> MutVisitor for ATIVisitor<'psess, 'modfuncs> {
     fn visit_item(&mut self, item: &mut ast::Item) {
         if let ast::ItemKind::Fn(box ast::Fn {
             ref mut body,
             ref ident,
+            ref mut sig,
             ..
-        }) = item.kind
-        {
+        }) = item.kind {
             if let Some(block) = body {
-                if common::is_function_main(ident) {
-                    for stmt in &mut block.stmts {
-                        // TODO: there are a bunch of ways to bind variables
-                        // handle all of them, not just `let x = 10` type statements.
-                        if let ast::StmtKind::Let(box ast::Local {
-                            pat: box ast::Pat {
-                                kind: ast::PatKind::Ident(_, ref var_ident, _),
-                                ..
-                            },
-                            kind: ast::LocalKind::Init(box ref mut expr),
+                for stmt in &mut block.stmts {
+                    // TODO: there are a bunch of ways to bind variables
+                    // handle all of them, not just `let x = 10` type statements.
+                    if let ast::StmtKind::Let(box ast::Local {
+                        pat: box ast::Pat {
+                            kind: ast::PatKind::Ident(_, ref var_ident, _),
                             ..
-                        }) = stmt.kind
-                        {
-                            *expr = self.create_let_site_bind(var_ident, expr);
-                            // println!("{:?}", expr);
-                        }
+                        },
+                        kind: ast::LocalKind::Init(box ref mut expr),
+                        ..
+                    }) = stmt.kind
+                    {
+                        *expr = self.create_let_site_bind(var_ident, expr);
                     }
+                }
 
+                if common::is_function_main(ident) {
+                    // main function has a slightly different prelude/epilogue
                     let prelude = self.create_main_prelude();
                     for (i, stmt) in prelude.into_iter().enumerate() {
                         block.stmts.insert(i, stmt);
@@ -51,8 +55,31 @@ impl<'psess> MutVisitor for ATIVisitor<'psess> {
                         block.stmts.insert(len + i, stmt);
                     }
                 }
+
+                if !common::is_function_skipped(ident, &item.attrs) {
+                    let param_names: Vec<_> = sig.decl.inputs.iter().map(|param| {
+                        if let ast::PatKind::Ident(_, ref ident, _) = param.pat.kind {
+                            ident.as_str()
+                        } else {
+                            panic!();
+                        }
+                    }).collect();
+
+                    let prelude = self.create_prelude(ident.as_str(), &param_names);
+                    for (i, stmt) in prelude.into_iter().enumerate() {
+                        block.stmts.insert(i, stmt);
+                    }
+
+                    let epilogue = self.create_epilogue();
+                    // TODO: dirty way of inserting before end
+                    let len = block.stmts.len() - 1;
+                    for (i, stmt) in epilogue.into_iter().enumerate() {
+                        block.stmts.insert(len + i, stmt);
+                    }
+                }
+
             }
-        }
+        } 
 
         mut_visit::walk_item(self, item);
     }
@@ -64,22 +91,48 @@ impl<'psess> MutVisitor for ATIVisitor<'psess> {
         if let ast::ExprKind::Lit(_) = expr.kind {
             // expression is a literal!
             // convert the expression into a TaggedValue
-            *expr = self.tupleify_literal_expr(expr);
+            *expr = self.tupleify_expr(expr);
+        } else if let ast::ExprKind::Call(ref func, ref mut args) = expr.kind {
+            if let ast::ExprKind::Path(None, path) = &func.kind {
+                // TODO: not sure if this works with complex function invocations
+                // that use some mod::submod::func_name() thing, might need to preserve
+                // the entire path as an identifier of the function, and use that in
+                // the modified_functions set.
+                if let Some(last_segment) = path.segments.last() {
+                    if self.modified_funcs.contains(&last_segment.ident) {
+                        // args are being passed to a tracked function, retain tuplings if necessary
+                        // TODO:  something i assume
+
+                    } else {
+                        // args are being passed to an untracked function
+                        for arg_expr in args.iter_mut() {
+                            // TODO: include check for non tupled args, so we don't accidentally unbind
+                            arg_expr.kind = self.unbind_tupled_expr(arg_expr);
+                        }
+
+                        *expr = self.tupleify_expr(expr);
+                    }
+                }
+            }
+        } else if let ast::ExprKind::MacCall(box ast::MacCall {
+            ref mut path,
+            ref mut args,
+        }) = expr.kind {
+            // TODO: handle macro invocations, also handle methods at some point holy shit
         }
     }
 }
 
-impl<'psess> ATIVisitor<'psess> {
-    pub fn new(psess: &'psess ParseSess) -> Self {
-        ATIVisitor { psess }
+impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
+    pub fn new(psess: &'psess ParseSess, modified_funcs: &'modfuncs HashSet<Ident>) -> Self {
+        ATIVisitor { psess, modified_funcs }
     }
 
     // TODO: I'm unsure if parse_code's additional block scope will move the analysis stuff out of scope
     // this wasn't a problem when I was trying to create a var in prelude and use in epilogue, so for now its fine
     fn create_main_prelude(&self) -> Vec<ast::Stmt> {
         let code = r#"
-            let ATI_ANALYSIS: ATI = Rc::new(RefCell::new(AbstractTypeInference::new()));
-            let mut site = ATI_ANALYSIS.borrow_mut().get_site(stringify!(main));
+            let mut site = ATI_ANALYSIS.lock().unwrap().get_site(stringify!(main));
         "#;
         self.parse_code(code)
     }
@@ -87,14 +140,40 @@ impl<'psess> ATIVisitor<'psess> {
     fn create_main_epilogue(&self) -> Vec<ast::Stmt> {
         // TODO: modify .report() to cleanly output to file.
         let code = r#"
-            ATI_ANALYSIS.borrow_mut().update_site(site);
-            ATI_ANALYSIS.borrow().report();
+            let mut ati_locked = ATI_ANALYSIS.lock().unwrap();
+            ati_locked.update_site(site);
+            ati_locked.report();
+        "#;
+        self.parse_code(code)
+    }
+
+    fn create_prelude(&self, func_name: &str, param_names: &[&str]) -> Vec<ast::Stmt> {
+        let site = format!(r#"
+            let mut site = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({func_name}));
+        "#);
+        let param_binds: String = param_names.iter().map(|param_name| {
+            format!(r#"site.bind(stringify!({param_name}), {param_name});"#)
+        }).collect::<Vec<_>>().join("");
+
+        let code = format!(r#"
+            {site}
+            {param_binds}
+        "#);
+
+        self.parse_code(&code)
+    }
+
+    fn create_epilogue(&self) -> Vec<ast::Stmt> {
+        let code = r#"
+            ATI_ANALYSIS.lock().unwrap().update_site(site);
         "#;
         self.parse_code(code)
     }
 
     // expr is already the rhs of a `let x = ...` statement
     fn create_let_site_bind(&self, var_ident: &Ident, expr: &ast::Expr) -> ast::Expr {
+        // TODO: There has to be easier ways to construct these kinds of nodes, 
+        // like some sort of helper function. Doing this manually sucks.
         ast::Expr {
             id: ast::DUMMY_NODE_ID,
             kind: ast::ExprKind::MethodCall(Box::new(ast::MethodCall {
@@ -168,44 +247,7 @@ impl<'psess> ATIVisitor<'psess> {
         }
     }
 
-    fn tupleify_literal_expr(&self, expr: &ast::Expr) -> ast::Expr {
-        let ati_clone = Box::new(ast::Expr {
-            id: ast::DUMMY_NODE_ID,
-            kind: ast::ExprKind::MethodCall(Box::new(ast::MethodCall {
-                seg: ast::PathSegment {
-                    ident: Ident::new(Symbol::intern("clone"), DUMMY_SP),
-                    id: ast::DUMMY_NODE_ID,
-                    args: None,
-                },
-                // The receiver, e.g. `x`.
-                receiver: Box::new(ast::Expr {
-                    id: ast::DUMMY_NODE_ID,
-                    kind: ast::ExprKind::Path(
-                        None,
-                        ast::Path {
-                            span: DUMMY_SP,
-                            segments: [ast::PathSegment {
-                                ident: Ident::new(Symbol::intern("ATI_ANALYSIS"), DUMMY_SP),
-                                id: ast::DUMMY_NODE_ID,
-                                args: None,
-                            }]
-                            .into(),
-                            tokens: None,
-                        },
-                    ),
-                    tokens: None,
-                    attrs: [].into(),
-                    span: DUMMY_SP,
-                }),
-                // The arguments, e.g. `a, b, c`.
-                args: [].into(),
-                span: DUMMY_SP,
-            })),
-            span: DUMMY_SP,
-            attrs: [].into(),
-            tokens: None,
-        });
-
+    fn tupleify_expr(&self, expr: &ast::Expr) -> ast::Expr {
         let new_expr = ast::Expr {
             id: ast::DUMMY_NODE_ID,
             kind: ast::ExprKind::Call(
@@ -218,7 +260,7 @@ impl<'psess> ATIVisitor<'psess> {
                             segments: [
                                 ast::PathSegment {
                                     ident: Ident::new(
-                                        Symbol::intern("AbstractTypeInference"),
+                                        Symbol::intern("ATI"),
                                         DUMMY_SP,
                                     ),
                                     id: ast::DUMMY_NODE_ID,
@@ -238,7 +280,7 @@ impl<'psess> ATIVisitor<'psess> {
                     attrs: [].into(),
                     tokens: None,
                 }),
-                [ati_clone, Box::new(expr.clone())].into(),
+                [Box::new(expr.clone())].into(),
             ),
             span: DUMMY_SP,
             attrs: [].into(),
@@ -248,30 +290,25 @@ impl<'psess> ATIVisitor<'psess> {
         new_expr
     }
 
-    fn create_print_statement(&self) -> Vec<ast::Stmt> {
-        let code = r#"
-            println!("From compiler: {}", added_by_compiler);
-        "#;
-        self.parse_code(code)
-    }
+    fn unbind_tupled_expr(&self, expr: &mut ast::Expr) -> ast::ExprKind {
+        ast::ExprKind::Field(
+            Box::new(expr.clone()),
+            Ident::new(Symbol::intern("0"), DUMMY_SP),
+        )
 
-    fn create_prelude(&self) -> Vec<ast::Stmt> {
-        let code = r#"
-            let a: Id = 10;
-            // let t = Tag::new(&a);
-        "#;
-        self.parse_code(code)
-    }
-
-    fn create_epilogue(&self) -> Vec<ast::Stmt> {
-        let code = r#"
-            println!("{:?}", a);
-        "#;
-        self.parse_code(code)
-    }
-
-    fn create_var_bind() -> ast::Stmt {
-        todo!();
+        // alternative way of doing the above thing
+        // ast::ExprKind::MethodCall(
+        //     Box::new(ast::MethodCall {
+        //         seg: ast::PathSegment {
+        //             ident: Ident::new(Symbol::intern("unbind"), DUMMY_SP),
+        //             id: ast::DUMMY_NODE_ID,
+        //             args: None,
+        //         },
+        //         receiver: Box::new(expr.clone()),
+        //         args: [].into(),
+        //         span: DUMMY_SP,
+        //     })
+        // )
     }
 
     fn parse_code(&self, code: &str) -> Vec<ast::Stmt> {

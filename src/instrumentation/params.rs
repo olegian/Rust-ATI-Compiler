@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use rustc_ast as ast;
 use rustc_ast::mut_visit::{self, MutVisitor};
-use rustc_ast::token;
 use rustc_parse::lexer::StripTokens;
 use rustc_parse::new_parser_from_source_str;
 use rustc_session::parse::ParseSess;
@@ -22,7 +21,10 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
             // To all non-skipped function definitions, push on a u32
             ast::ItemKind::Fn(box ast::Fn {
                 ref mut ident,
-                ref mut sig,
+                sig: ast::FnSig {
+                    ref mut decl,
+                    ..
+                },
                 ..
             }) => {
                 if !common::is_function_skipped(ident, &item.attrs) {
@@ -32,7 +34,21 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
                     // the modified_functions set.
                     self.modified_functions.insert(*ident);
 
-                    self.push_param(&mut sig.decl, "added_by_compiler", "u32");
+                    // go through parameters of function...
+                    for ast::Param {ty, ..} in &mut decl.inputs {
+                        if common::is_type_tupled(ty) {
+                            // ... if type is tupled, we need to convert the type to be 
+                            // a TaggedValue<ty> to carry tracking info through fn boundary
+                            ty.kind = self.tuple_type(ty);
+                        }
+                    }
+
+                    if let ast::FnRetTy::Ty(ref mut return_type) = decl.output {
+                        if common::is_type_tupled(return_type) {
+                            // if return type exists and should also be tupled
+                            return_type.kind = self.tuple_type(return_type);
+                        }
+                    }
                 }
             }
 
@@ -53,6 +69,36 @@ impl<'a> ModifyParamsVisitor<'a> {
 
     pub fn get_modified_funcs(&self) -> &HashSet<Ident> {
         &self.modified_functions
+    }
+
+    fn tuple_type(&self, old_type: &ast::Ty) -> ast::TyKind {
+        ast::TyKind::Path(
+            None,
+            ast::Path {
+                segments: [
+                    ast::PathSegment {
+                        ident: Ident::new(Symbol::intern("TaggedValue"), DUMMY_SP),
+                        id: ast::DUMMY_NODE_ID,
+                        args: Some(
+                            Box::new(ast::AngleBracketed(
+                                ast::AngleBracketedArgs {
+                                    span: DUMMY_SP,
+                                    args: [
+                                        ast::AngleBracketedArg::Arg(
+                                            ast::GenericArg::Type(
+                                                Box::new(old_type.clone())
+                                            )
+                                        )
+                                    ].into(),
+                                }
+                            ))
+                        ),
+                    }
+                ].into(),
+                span: DUMMY_SP,
+                tokens: None,
+            }
+        )
     }
 
     /// Parse a type string into an ast::Ty
@@ -102,69 +148,5 @@ impl<'a> ModifyParamsVisitor<'a> {
     fn push_param(&self, fn_decl: &mut Box<ast::FnDecl>, param_name: &str, param_type: &str) {
         let new_param = self.create_param(param_name, param_type);
         fn_decl.inputs.push(new_param);
-    }
-}
-
-pub struct UpdateInvocationsVisitor<'a> {
-    // functions which ModifyParamVisitor modified to include the extra params
-    modified_functions: &'a HashSet<Ident>,
-}
-
-impl<'a> MutVisitor for UpdateInvocationsVisitor<'a> {
-    /// adds extra parameter to each function invocation which isn't skipped
-    fn visit_expr(&mut self, expr: &mut ast::Expr) {
-        if let ast::ExprKind::Call(ref func, ref mut args) = expr.kind {
-            if let ast::ExprKind::Path(None, path) = &func.kind {
-                // TODO: not sure if this works with complex function invocations
-                // that use some mod::submod::func_name() thing, might need to preserve
-                // the entire path as an identifier of the function, and use that in
-                // the modified_functions set.
-                if let Some(last_segment) = path.segments.last() {
-                    if self.modified_functions.contains(&last_segment.ident) {
-                        let arg = self.create_arg();
-                        args.push(arg);
-                    }
-                }
-            }
-        }
-
-        // continue visiting nested expressions
-        mut_visit::walk_expr(self, expr);
-    }
-}
-
-impl<'a> UpdateInvocationsVisitor<'a> {
-    pub fn new(modified_functions: &'a HashSet<Ident>) -> Self {
-        Self { modified_functions }
-    }
-
-    /// Parse a type string into an ast::Ty
-    fn create_arg(&self) -> Box<ast::Expr> {
-        // technically, we will be passing a variable so...
-        // let ident = Ident::new(Symbol::intern("var_name"), DUMMY_SP);
-
-        // Box::new(ast::Expr {
-        //     id: ast::DUMMY_NODE_ID,
-        //     kind: ast::ExprKind::Path(
-        //         None,
-        //         ast::Path::from_ident(ident),
-        //     ),
-        //     span: DUMMY_SP,
-        //     attrs: ast::AttrVec::new(),
-        //     tokens: None,
-        // })
-
-        // ... just passing a literal for now
-        Box::new(ast::Expr {
-            id: ast::DUMMY_NODE_ID,
-            kind: ast::ExprKind::Lit(token::Lit {
-                kind: token::LitKind::Integer, // specifies literal type
-                symbol: Symbol::intern("100"),
-                suffix: None,
-            }),
-            span: DUMMY_SP,
-            attrs: ast::AttrVec::new(),
-            tokens: None,
-        })
     }
 }

@@ -20,7 +20,7 @@ use std::{env, path::Path};
 
 mod instrumentation;
 use crate::instrumentation::{
-    ATIVisitor, ModifyParamsVisitor, UpdateInvocationsVisitor, define_types_from_file,
+    ATIVisitor, ModifyParamsVisitor, define_types_from_file,
 };
 
 // TODO: none of this code right now handles anything but pure functions.
@@ -44,13 +44,9 @@ impl rustc_driver::Callbacks for Callbacks {
         let mut modify_params_visitor = ModifyParamsVisitor::new(&compiler.sess.psess);
         modify_params_visitor.visit_crate(krate);
 
-        // make sure all invocations of modified functions pass in appropriate values
         let modified_funcs = modify_params_visitor.get_modified_funcs();
-        let mut update_invocations_visitor = UpdateInvocationsVisitor::new(modified_funcs);
-        update_invocations_visitor.visit_crate(krate);
-
         // mutate each function body to add preludes, epilogues, and unifications
-        let mut visitor = ATIVisitor::new(&compiler.sess.psess);
+        let mut visitor = ATIVisitor::new(&compiler.sess.psess, modified_funcs);
         visitor.visit_crate(krate);
 
         // add required ATI types to crate
@@ -60,6 +56,8 @@ impl rustc_driver::Callbacks for Callbacks {
             &compiler.sess.psess,
             krate,
         );
+
+        // rustc_driver::pretty::print(&compiler.sess, rustc_session::config::PpMode::AstTree, rustc_driver::pretty::PrintExtra::AfterParsing { krate: &krate });
 
         Compilation::Continue
     }
