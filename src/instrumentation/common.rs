@@ -41,9 +41,17 @@ pub fn is_expr_tupled(expr_kind: &ast::ExprKind) -> bool {
     !matches!(expr_kind, ast::ExprKind::Struct(_))
 }
 
+pub fn is_type_tupled(ty: &Ty) -> bool {
+    if let ast::TyKind::Path(_, ast::Path {
+        ref segments, ..
+    }) = ty.kind {
+        segments[0].ident.as_str() == "TaggedValue"
+    } else { false }
+}
+
 // this function is very similar to ast::TyKind::maybe_scalar
 // but I'm leaving it here so that we have more control over it
-pub fn is_type_tupled(ty: &Ty) -> bool {
+pub fn can_type_be_tupled(ty: &Ty) -> bool {
     let ty = ty.peel_refs(); // ignore & and &mut, we care about actual type
     let Some(ty_sym) = ty.kind.is_simple_path() else {
         return false; // unit type then, which idt we need to track at all

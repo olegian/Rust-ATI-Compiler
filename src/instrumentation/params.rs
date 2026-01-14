@@ -33,7 +33,7 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
 
                     // go through parameters of function...
                     for ast::Param { ty, .. } in &mut decl.inputs {
-                        if common::is_type_tupled(ty) {
+                        if common::can_type_be_tupled(ty) {
                             // ... if type is tupled, we need to convert the type to be
                             // a TaggedValue<ty> to carry tracking info through fn boundary
                             ty.kind = self.tuple_type(ty);
@@ -41,7 +41,7 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
                     }
 
                     if let ast::FnRetTy::Ty(ref mut return_type) = decl.output {
-                        if common::is_type_tupled(return_type) {
+                        if common::can_type_be_tupled(return_type) {
                             // if return type exists and should also be tupled
                             return_type.kind = self.tuple_type(return_type);
                         }
@@ -50,7 +50,7 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
             },
             ast::ItemKind::Struct(_, _, ast::VariantData::Struct { ref mut fields, .. }) => {
                 for field_def in fields {
-                    if common::is_type_tupled(&*field_def.ty) {
+                    if common::can_type_be_tupled(&*field_def.ty) {
                         field_def.ty.kind = self.tuple_type(&field_def.ty);
                     }
                 }

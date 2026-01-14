@@ -158,19 +158,20 @@ impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
         self.parse_code(code)
     }
 
-    fn create_prelude(&self, func_name: &str, param_names: &[ast::Param]) -> Vec<ast::Stmt> {
+    fn create_prelude(&self, func_name: &str, params: &[ast::Param]) -> Vec<ast::Stmt> {
         let site = format!(
             r#"
             let mut site = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({func_name}));
         "#
         );
-        let param_binds: String = param_names
+        println!("{:#?}", params);
+        let param_binds: String = params
             .iter()
             .filter(|param| common::is_type_tupled(&param.ty))
             .map(|param| {
                 if let ast::PatKind::Ident(_, ref ident, _) = param.pat.kind {
                     let param_name = ident.as_str();
-                    format!(r#"site.bind(stringify!({func_name}), {param_name});"#)
+                    format!(r#"site.bind(stringify!({param_name}), {param_name});"#)
                 } else {
                     panic!();
                 }
