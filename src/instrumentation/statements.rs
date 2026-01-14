@@ -1,4 +1,4 @@
-use std::collections::{HashSet};
+use std::collections::HashSet;
 
 use rustc_ast as ast;
 use rustc_ast::mut_visit::{self, MutVisitor};
@@ -24,21 +24,25 @@ impl<'psess, 'modfuncs> MutVisitor for ATIVisitor<'psess, 'modfuncs> {
             ref ident,
             ref mut sig,
             ..
-        }) = item.kind {
+        }) = item.kind
+        {
             if let Some(block) = body {
                 for stmt in &mut block.stmts {
                     // TODO: there are a bunch of ways to bind variables
                     // handle all of them, not just `let x = 10` type statements.
                     if let ast::StmtKind::Let(box ast::Local {
-                        pat: box ast::Pat {
-                            kind: ast::PatKind::Ident(_, ref var_ident, _),
-                            ..
-                        },
+                        pat:
+                            box ast::Pat {
+                                kind: ast::PatKind::Ident(_, ref var_ident, _),
+                                ..
+                            },
                         kind: ast::LocalKind::Init(box ref mut expr),
                         ..
                     }) = stmt.kind
                     {
-                        *expr = self.create_let_site_bind(var_ident, expr);
+                        if common::is_expr_tupled(&expr.kind) {
+                            *expr = self.create_let_site_bind(var_ident, expr);
+                        }
                     }
                 }
 
@@ -57,15 +61,20 @@ impl<'psess, 'modfuncs> MutVisitor for ATIVisitor<'psess, 'modfuncs> {
                 }
 
                 if !common::is_function_skipped(ident, &item.attrs) {
-                    let param_names: Vec<_> = sig.decl.inputs.iter().map(|param| {
-                        if let ast::PatKind::Ident(_, ref ident, _) = param.pat.kind {
-                            ident.as_str()
-                        } else {
-                            panic!();
-                        }
-                    }).collect();
+                    // let param_names: Vec<_> = sig
+                    //     .decl
+                    //     .inputs
+                    //     .iter()
+                    //     .map(|param| {
+                    //         if let ast::PatKind::Ident(_, ref ident, _) = param.pat.kind {
+                    //             ident.as_str()
+                    //         } else {
+                    //             panic!();
+                    //         }
+                    //     })
+                    //     .collect();
 
-                    let prelude = self.create_prelude(ident.as_str(), &param_names);
+                    let prelude = self.create_prelude(ident.as_str(), &sig.decl.inputs);
                     for (i, stmt) in prelude.into_iter().enumerate() {
                         block.stmts.insert(i, stmt);
                     }
@@ -77,9 +86,8 @@ impl<'psess, 'modfuncs> MutVisitor for ATIVisitor<'psess, 'modfuncs> {
                         block.stmts.insert(len + i, stmt);
                     }
                 }
-
             }
-        } 
+        }
 
         mut_visit::walk_item(self, item);
     }
@@ -102,7 +110,6 @@ impl<'psess, 'modfuncs> MutVisitor for ATIVisitor<'psess, 'modfuncs> {
                     if self.modified_funcs.contains(&last_segment.ident) {
                         // args are being passed to a tracked function, retain tuplings if necessary
                         // TODO:  something i assume
-
                     } else {
                         // args are being passed to an untracked function
                         for arg_expr in args.iter_mut() {
@@ -117,7 +124,8 @@ impl<'psess, 'modfuncs> MutVisitor for ATIVisitor<'psess, 'modfuncs> {
         } else if let ast::ExprKind::MacCall(box ast::MacCall {
             ref mut path,
             ref mut args,
-        }) = expr.kind {
+        }) = expr.kind
+        {
             // TODO: handle macro invocations, also handle methods at some point holy shit
         }
     }
@@ -125,7 +133,10 @@ impl<'psess, 'modfuncs> MutVisitor for ATIVisitor<'psess, 'modfuncs> {
 
 impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
     pub fn new(psess: &'psess ParseSess, modified_funcs: &'modfuncs HashSet<Ident>) -> Self {
-        ATIVisitor { psess, modified_funcs }
+        ATIVisitor {
+            psess,
+            modified_funcs,
+        }
     }
 
     // TODO: I'm unsure if parse_code's additional block scope will move the analysis stuff out of scope
@@ -147,18 +158,32 @@ impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
         self.parse_code(code)
     }
 
-    fn create_prelude(&self, func_name: &str, param_names: &[&str]) -> Vec<ast::Stmt> {
-        let site = format!(r#"
+    fn create_prelude(&self, func_name: &str, param_names: &[ast::Param]) -> Vec<ast::Stmt> {
+        let site = format!(
+            r#"
             let mut site = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({func_name}));
-        "#);
-        let param_binds: String = param_names.iter().map(|param_name| {
-            format!(r#"site.bind(stringify!({param_name}), {param_name});"#)
-        }).collect::<Vec<_>>().join("");
+        "#
+        );
+        let param_binds: String = param_names
+            .iter()
+            .filter(|param| common::is_type_tupled(&param.ty))
+            .map(|param| {
+                if let ast::PatKind::Ident(_, ref ident, _) = param.pat.kind {
+                    let param_name = ident.as_str();
+                    format!(r#"site.bind(stringify!({func_name}), {param_name});"#)
+                } else {
+                    panic!();
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("");
 
-        let code = format!(r#"
+        let code = format!(
+            r#"
             {site}
             {param_binds}
-        "#);
+        "#
+        );
 
         self.parse_code(&code)
     }
@@ -172,7 +197,7 @@ impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
 
     // expr is already the rhs of a `let x = ...` statement
     fn create_let_site_bind(&self, var_ident: &Ident, expr: &ast::Expr) -> ast::Expr {
-        // TODO: There has to be easier ways to construct these kinds of nodes, 
+        // TODO: There has to be easier ways to construct these kinds of nodes,
         // like some sort of helper function. Doing this manually sucks.
         ast::Expr {
             id: ast::DUMMY_NODE_ID,
@@ -185,17 +210,16 @@ impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
                 receiver: Box::new(ast::Expr {
                     id: ast::DUMMY_NODE_ID,
                     kind: ast::ExprKind::Path(
-                        None, 
+                        None,
                         ast::Path {
-                            span: DUMMY_SP, 
-                            segments: [
-                                ast::PathSegment {
-                                    ident: Ident::new(Symbol::intern("site"), DUMMY_SP),
-                                    id: ast::DUMMY_NODE_ID,
-                                    args: None,
-                                },
-                            ].into(),
-                            tokens: None,                            
+                            span: DUMMY_SP,
+                            segments: [ast::PathSegment {
+                                ident: Ident::new(Symbol::intern("site"), DUMMY_SP),
+                                id: ast::DUMMY_NODE_ID,
+                                args: None,
+                            }]
+                            .into(),
+                            tokens: None,
                         },
                     ),
                     span: DUMMY_SP,
@@ -205,40 +229,42 @@ impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
                 args: [
                     Box::new(ast::Expr {
                         id: ast::DUMMY_NODE_ID,
-                        kind: ast::ExprKind::MacCall(
-                            Box::new(ast::MacCall {
-                                path: ast::Path {
-                                    span: DUMMY_SP,
-                                    segments: [
-                                        ast::PathSegment {
-                                            ident: Ident::new(Symbol::intern("stringify"), DUMMY_SP),
-                                            id: ast::DUMMY_NODE_ID,
-                                            args: None,
-                                        },
-                                        ].into(),
-                                        tokens: None,
+                        kind: ast::ExprKind::MacCall(Box::new(ast::MacCall {
+                            path: ast::Path {
+                                span: DUMMY_SP,
+                                segments: [ast::PathSegment {
+                                    ident: Ident::new(Symbol::intern("stringify"), DUMMY_SP),
+                                    id: ast::DUMMY_NODE_ID,
+                                    args: None,
+                                }]
+                                .into(),
+                                tokens: None,
+                            },
+                            args: Box::new(ast::DelimArgs {
+                                dspan: ast::tokenstream::DelimSpan {
+                                    open: DUMMY_SP,
+                                    close: DUMMY_SP,
                                 },
-                                args: Box::new(ast::DelimArgs {
-                                    dspan: ast::tokenstream::DelimSpan {
-                                        open: DUMMY_SP,
-                                        close: DUMMY_SP,
-                                    },
-                                    delim: token::Delimiter::Parenthesis,
-                                    tokens: ast::tokenstream::TokenStream::new( [
-                                        ast::tokenstream::TokenTree::token_joint_hidden(
-                                            token::TokenKind::Ident(Symbol::intern(var_ident.as_str()), token::IdentIsRaw::No),
-                                            DUMMY_SP
-                                        )
-                                    ].into()),
-                                })
-                            })
-                        ),
+                                delim: token::Delimiter::Parenthesis,
+                                tokens: ast::tokenstream::TokenStream::new(
+                                    [ast::tokenstream::TokenTree::token_joint_hidden(
+                                        token::TokenKind::Ident(
+                                            Symbol::intern(var_ident.as_str()),
+                                            token::IdentIsRaw::No,
+                                        ),
+                                        DUMMY_SP,
+                                    )]
+                                    .into(),
+                                ),
+                            }),
+                        })),
                         span: DUMMY_SP,
                         attrs: [].into(),
                         tokens: None,
                     }),
-                    Box::new(expr.clone())
-                ].into(),
+                    Box::new(expr.clone()),
+                ]
+                .into(),
                 span: DUMMY_SP,
             })),
             span: DUMMY_SP,
@@ -259,10 +285,7 @@ impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
                             span: DUMMY_SP,
                             segments: [
                                 ast::PathSegment {
-                                    ident: Ident::new(
-                                        Symbol::intern("ATI"),
-                                        DUMMY_SP,
-                                    ),
+                                    ident: Ident::new(Symbol::intern("ATI"), DUMMY_SP),
                                     id: ast::DUMMY_NODE_ID,
                                     args: None,
                                 },

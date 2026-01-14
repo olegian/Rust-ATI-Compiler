@@ -19,9 +19,7 @@ use rustc_middle::ty::TyCtxt;
 use std::{env, path::Path};
 
 mod instrumentation;
-use crate::instrumentation::{
-    ATIVisitor, ModifyParamsVisitor, define_types_from_file,
-};
+use crate::instrumentation::{ATIVisitor, ModifyParamsVisitor, define_types_from_file};
 
 // TODO: none of this code right now handles anything but pure functions.
 //       idk what to do with closures, and then associated functions need

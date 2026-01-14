@@ -21,10 +21,7 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
             // To all non-skipped function definitions, push on a u32
             ast::ItemKind::Fn(box ast::Fn {
                 ref mut ident,
-                sig: ast::FnSig {
-                    ref mut decl,
-                    ..
-                },
+                sig: ast::FnSig { ref mut decl, .. },
                 ..
             }) => {
                 if !common::is_function_skipped(ident, &item.attrs) {
@@ -35,9 +32,9 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
                     self.modified_functions.insert(*ident);
 
                     // go through parameters of function...
-                    for ast::Param {ty, ..} in &mut decl.inputs {
+                    for ast::Param { ty, .. } in &mut decl.inputs {
                         if common::is_type_tupled(ty) {
-                            // ... if type is tupled, we need to convert the type to be 
+                            // ... if type is tupled, we need to convert the type to be
                             // a TaggedValue<ty> to carry tracking info through fn boundary
                             ty.kind = self.tuple_type(ty);
                         }
@@ -48,6 +45,13 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
                             // if return type exists and should also be tupled
                             return_type.kind = self.tuple_type(return_type);
                         }
+                    }
+                }
+            },
+            ast::ItemKind::Struct(_, _, ast::VariantData::Struct { ref mut fields, .. }) => {
+                for field_def in fields {
+                    if common::is_type_tupled(&*field_def.ty) {
+                        field_def.ty.kind = self.tuple_type(&field_def.ty);
                     }
                 }
             }
@@ -75,29 +79,21 @@ impl<'a> ModifyParamsVisitor<'a> {
         ast::TyKind::Path(
             None,
             ast::Path {
-                segments: [
-                    ast::PathSegment {
-                        ident: Ident::new(Symbol::intern("TaggedValue"), DUMMY_SP),
-                        id: ast::DUMMY_NODE_ID,
-                        args: Some(
-                            Box::new(ast::AngleBracketed(
-                                ast::AngleBracketedArgs {
-                                    span: DUMMY_SP,
-                                    args: [
-                                        ast::AngleBracketedArg::Arg(
-                                            ast::GenericArg::Type(
-                                                Box::new(old_type.clone())
-                                            )
-                                        )
-                                    ].into(),
-                                }
-                            ))
-                        ),
-                    }
-                ].into(),
+                segments: [ast::PathSegment {
+                    ident: Ident::new(Symbol::intern("TaggedValue"), DUMMY_SP),
+                    id: ast::DUMMY_NODE_ID,
+                    args: Some(Box::new(ast::AngleBracketed(ast::AngleBracketedArgs {
+                        span: DUMMY_SP,
+                        args: [ast::AngleBracketedArg::Arg(ast::GenericArg::Type(
+                            Box::new(old_type.clone()),
+                        ))]
+                        .into(),
+                    }))),
+                }]
+                .into(),
                 span: DUMMY_SP,
                 tokens: None,
-            }
+            },
         )
     }
 
