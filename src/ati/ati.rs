@@ -11,6 +11,7 @@ pub static ATI_ANALYSIS: LazyLock<Arc<Mutex<ATI>>> =
 
 // MARK: tag.rs
 /// Generates incrementing tags of type `Id`, with each call to `tag()`
+#[derive(Debug)]
 pub struct Tagger {
     next_id: Id,
 }
@@ -39,7 +40,7 @@ impl Tagger {
 /// as long as `T` implements each operator. Whenever two tagged values
 /// are observed interacting through these operators, global `ATI_ANALYSIS`
 /// is updated to record the interaction.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct TaggedValue<T: Copy>(pub T, pub Id);
 
 impl<T> TaggedValue<T>
@@ -172,6 +173,7 @@ where
 // MARK: site.rs
 /// Represents a Site under analysis, ultimately a mapping of in-scope
 /// variables to thier values at the end of each function.
+#[derive(Debug)]
 pub struct Site {
     type_uf: UnionFind,
     var_tags: BTreeMap<String, Id>,
@@ -238,11 +240,11 @@ impl Site {
 
     /// Produces output, called at the end of main.
     pub fn report(&self) {
-        println!("=== {} === ", self.name);
+        println!("{}", self.name);
         for (var, tag) in self.var_tags.iter() {
-            println!("{var} -> {tag:?}");
+            println!("{var}:{tag:?}");
         }
-        println!("\n");
+        println!("---");
     }
 }
 
@@ -273,6 +275,7 @@ impl Sites {
 
     /// Output results for all analyzed sites.
     pub fn report(&self) {
+        println!("===ATI-ANALYSIS-START===");
         for (_, site) in self.locs.iter() {
             site.report();
         }
@@ -281,6 +284,7 @@ impl Sites {
 
 // MARK: union_find.rs
 /// Basic UnionFind implementation, with some light rank optimization.
+#[derive(Debug)]
 pub struct UnionFind {
     id_to_index: HashMap<Id, usize>,
     pub index_to_set: Vec<Id>,

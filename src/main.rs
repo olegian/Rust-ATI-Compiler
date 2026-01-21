@@ -42,7 +42,7 @@ impl rustc_driver::Callbacks for Callbacks {
         krate: &mut ast::Crate,
     ) -> Compilation {
         // double formals for tags, and also pass around ATI struct between functions
-        let mut modify_params_visitor = ModifyParamsVisitor::new(&compiler.sess.psess);
+        let mut modify_params_visitor = ModifyParamsVisitor::new();
         modify_params_visitor.visit_crate(krate);
 
         let modified_funcs = modify_params_visitor.get_modified_funcs();
@@ -84,7 +84,7 @@ impl rustc_driver::Callbacks for Callbacks {
     }
 }
 
-fn main() {
+pub fn main() {
     let args: Vec<_> = env::args().collect();
     let mut cbs = Callbacks {};
     rustc_driver::run_compiler(&args, &mut cbs);
