@@ -12,11 +12,10 @@ use crate::instrumentation::common;
 
 pub struct ATIVisitor<'psess, 'modfuncs> {
     psess: &'psess ParseSess,
-    // used to determine whether a funtion invocation requires passing a TaggedValue or just the raw value
-    modified_funcs: &'modfuncs HashSet<Ident>,
+    // used to determine whether a function invocation requires passing a TaggedValue or just the raw value
+    modified_funcs: &'modfuncs HashSet<String>,
 }
 
-// TODO: epilogues have to be inserted before all returns, not just at the end of the body
 impl<'psess, 'modfuncs> MutVisitor for ATIVisitor<'psess, 'modfuncs> {
     fn visit_item(&mut self, item: &mut ast::Item) {
         if let ast::ItemKind::Fn(box ast::Fn {
@@ -27,65 +26,83 @@ impl<'psess, 'modfuncs> MutVisitor for ATIVisitor<'psess, 'modfuncs> {
         }) = item.kind
         {
             if let Some(block) = body {
-                for stmt in &mut block.stmts {
+                let fn_type = common::function_type(ident, &item.attrs);
+                if matches!(fn_type, common::AtiFnType::Untracked) {
+                    // could be useful to perform any stub management stuff
+                    return;
+                }
+
+                let mut return_locations: Vec<usize> = Vec::new();
+                for (i, stmt) in block.stmts.iter_mut().enumerate() {
                     // TODO: there are a bunch of ways to bind variables
                     // handle all of them, not just `let x = 10` type statements.
-                    if let ast::StmtKind::Let(box ast::Local {
-                        pat:
-                            box ast::Pat {
-                                kind: ast::PatKind::Ident(_, ref var_ident, _),
-                                ..
-                            },
-                        kind: ast::LocalKind::Init(box ref mut expr),
-                        ..
-                    }) = stmt.kind
-                    {
-                        if common::is_expr_tupled(&expr.kind) {
-                            *expr = self.create_let_site_bind(var_ident, expr);
+                    match stmt.kind {
+                        ast::StmtKind::Let(box ast::Local {
+                            pat:
+                                box ast::Pat {
+                                    kind: ast::PatKind::Ident(_, ref var_ident, _),
+                                    ..
+                                },
+                            kind: ast::LocalKind::Init(box ref mut expr),
+                            ..
+                        }) => {
+                            if common::is_expr_tupled(&expr.kind) {
+                                *expr = self.create_let_site_bind(var_ident, expr);
+                            }
                         }
+
+                        // this currently catches too many returns... idk what will
+                        // happen when closures are introduced / other places where you can return
+                        // like match statements.
+                        ast::StmtKind::Semi(box ast::Expr {
+                            kind: ast::ExprKind::Ret(_),
+                            ..
+                        })
+                        | ast::StmtKind::Expr(_) => {
+                            return_locations.push(i);
+                        }
+
+                        _ => {}
                     }
                 }
 
-                if common::is_function_main(ident) {
-                    // main function has a slightly different prelude/epilogue
-                    let prelude = self.create_main_prelude();
-                    for (i, stmt) in prelude.into_iter().enumerate() {
-                        block.stmts.insert(i, stmt);
+                let (prelude, epilogue) = match fn_type {
+                    common::AtiFnType::Main => {
+                        (self.create_main_prelude(), self.create_main_epilogue())
                     }
-
-                    let epilogue = self.create_main_epilogue();
-                    let len = block.stmts.len();
-                    for (i, stmt) in epilogue.into_iter().enumerate() {
-                        block.stmts.insert(len + i, stmt);
+                    common::AtiFnType::Tracked => (
+                        self.create_prelude(ident.as_str(), &sig.decl.inputs),
+                        self.create_epilogue(),
+                    ),
+                    common::AtiFnType::Untracked => {
+                        unreachable!();
                     }
-                }
+                };
 
-                if !common::is_function_skipped(ident, &item.attrs) {
-                    // let param_names: Vec<_> = sig
-                    //     .decl
-                    //     .inputs
-                    //     .iter()
-                    //     .map(|param| {
-                    //         if let ast::PatKind::Ident(_, ref ident, _) = param.pat.kind {
-                    //             ident.as_str()
-                    //         } else {
-                    //             panic!();
-                    //         }
-                    //     })
-                    //     .collect();
+                // add epilogue before every return statement
+                if return_locations.is_empty() {
+                } else {
+                    for return_loc in return_locations.into_iter().rev() {
+                        // TODO: 
+                        // if let ast::StmtKind::Semi(box ast::Expr {
+                        //     kind: ast::ExprKind::Ret(Some(ret_expr)),
+                        //     ..
+                        // })
+                        // | ast::StmtKind::Expr(ret_expr) = &block.stmts[return_loc].kind
+                        // {
+                        //     self.split_return(ret_expr);
+                        // }
 
-                    let prelude = self.create_prelude(ident.as_str(), &sig.decl.inputs);
-                    for (i, stmt) in prelude.into_iter().enumerate() {
-                        block.stmts.insert(i, stmt);
-                    }
-
-                    let epilogue = self.create_epilogue();
-                    // TODO: dirty way of inserting before end
-                    let len = block.stmts.len() - 1;
-                    for (i, stmt) in epilogue.into_iter().enumerate() {
-                        block.stmts.insert(len + i, stmt);
+                        block
+                            .stmts
+                            .splice(return_loc..return_loc, epilogue.clone().into_iter());
                     }
                 }
+
+                // add prolouge at start (important to do this last)
+                block.stmts.splice(0..0, prelude.into_iter());
+            } else {
+                // function with no body?
             }
         }
 
@@ -93,84 +110,93 @@ impl<'psess, 'modfuncs> MutVisitor for ATIVisitor<'psess, 'modfuncs> {
     }
 
     // Converts all literals into TaggedValue<T>'s
+    // and makes sure those values are correctly passed
+    // between the tracked/untracked boundary.
     fn visit_expr(&mut self, expr: &mut ast::Expr) {
         mut_visit::walk_expr(self, expr);
 
-        if let ast::ExprKind::Lit(_) = expr.kind {
-            // expression is a literal!
-            // convert the expression into a TaggedValue
-            *expr = self.tupleify_expr(expr);
-        } else if let ast::ExprKind::Call(ref func, ref mut args) = expr.kind {
-            if let ast::ExprKind::Path(None, path) = &func.kind {
-                // TODO: not sure if this works with complex function invocations
-                // that use some mod::submod::func_name() thing, might need to preserve
-                // the entire path as an identifier of the function, and use that in
-                // the modified_functions set.
-                if let Some(last_segment) = path.segments.last() {
-                    if self.modified_funcs.contains(&last_segment.ident) {
-                        // args are being passed to a tracked function, retain tuplings if necessary
-                        // TODO:  something i assume
-                    } else {
-                        // args are being passed to an untracked function
-                        for arg_expr in args.iter_mut() {
-                            // TODO: include check for non tupled args, so we don't accidentally unbind
-                            arg_expr.kind = self.unbind_tupled_expr(arg_expr);
-                        }
+        match expr.kind {
+            ast::ExprKind::Lit(_) => {
+                *expr = self.tupleify_expr(expr);
+            }
 
-                        *expr = self.tupleify_expr(expr);
+            ast::ExprKind::Call(ref func, ref mut args) => {
+                if let ast::ExprKind::Path(None, path) = &func.kind {
+                    // TODO: not sure if this works with complex function invocations
+                    // that involve use statements and renames. might have to construct
+                    // down paths from crate::. Temporary workaround below
+                    // prolly need to change Ident keys later.
+                    // let full_name = path.segments.iter().map(|seg| seg.ident.as_str()).collect::<Vec<_>>().join("::");
+
+                    if let Some(last_segment) = path.segments.last() {
+                        if !self.modified_funcs.contains(last_segment.ident.as_str()) {
+                            for arg_expr in args.iter_mut() {
+                                arg_expr.kind = self.unbind_tupled_expr(arg_expr);
+                            }
+
+                            *expr = self.tupleify_expr(expr);
+                        }
                     }
                 }
             }
-        } else if let ast::ExprKind::MacCall(box ast::MacCall {
-            ref mut path,
-            ref mut args,
-        }) = expr.kind
-        {
-            // TODO: handle macro invocations, also handle methods at some point holy shit
+
+            ast::ExprKind::MacCall(box ast::MacCall {
+                ref mut path,
+                ref mut args,
+            }) => {
+                // TODO: handle macro invocations
+            }
+
+            // TODO: handle method calls
+            _ => {}
         }
     }
 }
 
 impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
-    pub fn new(psess: &'psess ParseSess, modified_funcs: &'modfuncs HashSet<Ident>) -> Self {
+    pub fn new(psess: &'psess ParseSess, modified_funcs: &'modfuncs HashSet<String>) -> Self {
         ATIVisitor {
             psess,
             modified_funcs,
         }
     }
 
-    // TODO: I'm unsure if parse_code's additional block scope will move the analysis stuff out of scope
-    // this wasn't a problem when I was trying to create a var in prelude and use in epilogue, so for now its fine
+    /// Gets statements associated with main prelude, i.e.
+    /// creating the new site
     fn create_main_prelude(&self) -> Vec<ast::Stmt> {
         let code = r#"
-            let mut site = ATI_ANALYSIS.lock().unwrap().get_site(stringify!(main));
+            let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!(main));
         "#;
         self.parse_code(code)
     }
 
+    /// Gets statements associated with main epilogue, i.e.
+    /// outputing everything
     fn create_main_epilogue(&self) -> Vec<ast::Stmt> {
         // TODO: modify .report() to cleanly output to file.
         let code = r#"
             let mut ati_locked = ATI_ANALYSIS.lock().unwrap();
-            ati_locked.update_site(site);
+            ati_locked.update_site(site_exit);
             ati_locked.report();
         "#;
         self.parse_code(code)
     }
 
+    /// Prelude for all tracked functions other than main
+    /// Creates two sites, one for exit and one for enter
     fn create_prelude(&self, func_name: &str, params: &[ast::Param]) -> Vec<ast::Stmt> {
-        let site = format!(
-            r#"
-            let mut site = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({func_name}));
-        "#
-        );
         let param_binds: String = params
             .iter()
             .filter(|param| common::is_type_tupled(&param.ty))
             .map(|param| {
                 if let ast::PatKind::Ident(_, ref ident, _) = param.pat.kind {
                     let param_name = ident.as_str();
-                    format!(r#"site.bind(stringify!({param_name}), {param_name});"#)
+                    format!(
+                        r#"
+                        site_enter.bind(stringify!({param_name}), {param_name});
+                        site_exit.bind(stringify!({param_name}), {param_name});
+                    "#
+                    )
                 } else {
                     panic!();
                 }
@@ -180,22 +206,37 @@ impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
 
         let code = format!(
             r#"
-            {site}
+            let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({func_name}::ENTER));
+            let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({func_name}::EXIT));
             {param_binds}
+            ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
         "#
         );
 
         self.parse_code(&code)
     }
 
+    /// Creates epilogue used for all functions but main
     fn create_epilogue(&self) -> Vec<ast::Stmt> {
         let code = r#"
-            ATI_ANALYSIS.lock().unwrap().update_site(site);
+            ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
         "#;
         self.parse_code(code)
     }
 
-    // expr is already the rhs of a `let x = ...` statement
+    fn split_return(&self, expr: &ast::Expr) -> Vec<ast::Stmt> {
+        let code = r#"
+            let ret = RETURN_PLACEHOLDER;
+            return ret;
+        "#;
+
+        let block_ast = self.parse_code(code);
+        println!("{:?}", block_ast);
+        todo!();
+    }
+
+    /// Takes a local variable assignment and adds the variable to the site
+    /// expr is already the rhs of a `let x = ...` statement
     fn create_let_site_bind(&self, var_ident: &Ident, expr: &ast::Expr) -> ast::Expr {
         // TODO: There has to be easier ways to construct these kinds of nodes,
         // like some sort of helper function. Doing this manually sucks.
@@ -214,7 +255,7 @@ impl<'psess, 'modfuncs> ATIVisitor<'psess, 'modfuncs> {
                         ast::Path {
                             span: DUMMY_SP,
                             segments: [ast::PathSegment {
-                                ident: Ident::new(Symbol::intern("site"), DUMMY_SP),
+                                ident: Ident::new(Symbol::intern("site_exit"), DUMMY_SP),
                                 id: ast::DUMMY_NODE_ID,
                                 args: None,
                             }]

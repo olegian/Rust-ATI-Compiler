@@ -42,11 +42,11 @@ pub fn is_expr_tupled(expr_kind: &ast::ExprKind) -> bool {
 }
 
 pub fn is_type_tupled(ty: &Ty) -> bool {
-    if let ast::TyKind::Path(_, ast::Path {
-        ref segments, ..
-    }) = ty.kind {
+    if let ast::TyKind::Path(_, ast::Path { ref segments, .. }) = ty.kind {
         segments[0].ident.as_str() == "TaggedValue"
-    } else { false }
+    } else {
+        false
+    }
 }
 
 // this function is very similar to ast::TyKind::maybe_scalar
@@ -76,4 +76,21 @@ pub fn can_type_be_tupled(ty: &Ty) -> bool {
             | sym::char
             | sym::bool
     )
+}
+
+#[derive(Debug)]
+pub enum AtiFnType {
+    Main,
+    Tracked,
+    Untracked,
+}
+
+pub fn function_type(ident: &Ident, attrs: &[ast::Attribute]) -> AtiFnType {
+    // leaving this here to let us easily map more specific stuff later
+    // "" => AtiFnType::Tracked
+    // _ => AtiFnType::Untracked
+    match ident.as_str() {
+        "main" => AtiFnType::Main,
+        _ => AtiFnType::Tracked,
+    }
 }

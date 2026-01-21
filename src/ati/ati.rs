@@ -1,11 +1,13 @@
-use std::{collections::{BTreeMap, HashMap}, ops::{Add, Div, Mul, Sub}};
-use std::{sync::{Arc, LazyLock, Mutex}};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::{
+    collections::{BTreeMap, HashMap},
+    ops::{Add, Div, Mul, Sub},
+};
 
 pub type Id = u64;
 
-pub static ATI_ANALYSIS: LazyLock<Arc<Mutex<ATI>>> = LazyLock::new(|| {
-    Arc::new(Mutex::new(ATI::new()))
-});
+pub static ATI_ANALYSIS: LazyLock<Arc<Mutex<ATI>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(ATI::new())));
 
 // MARK: tag.rs
 /// Generates incrementing tags of type `Id`, with each call to `tag()`
@@ -28,12 +30,11 @@ impl Tagger {
     }
 }
 
-
 /// A tuple of a primative type T, alongside a unique `Id`.
-/// This isn't expected to be created directly, but is instead 
+/// This isn't expected to be created directly, but is instead
 /// used as a return type from `ATI::track`.
-/// 
-/// Further, this struct implements `std::ops::{Add, Sub, Mul, Div}`, 
+///
+/// Further, this struct implements `std::ops::{Add, Sub, Mul, Div}`,
 /// alongside Ord, and Eq for less than and comparison,
 /// as long as `T` implements each operator. Whenever two tagged values
 /// are observed interacting through these operators, global `ATI_ANALYSIS`
@@ -47,7 +48,7 @@ where
 {
     /// Creates a new TaggedValue, given the parameters
     pub fn new(value: T, id: Id) -> Self {
-        Self (value, id)
+        Self(value, id)
     }
 
     /// Copies the value out of the struct
@@ -66,8 +67,8 @@ where
     }
 }
 
-impl<T> Add<TaggedValue<T>> for TaggedValue<T> 
-where 
+impl<T> Add<TaggedValue<T>> for TaggedValue<T>
+where
     T: Add<Output = T> + Copy,
 {
     type Output = TaggedValue<T>;
@@ -200,12 +201,12 @@ impl Site {
 
     /// Records that a particular `tv: TaggedValue<T>` was bound to a variable
     /// named `var_name`.
-    /// 
-    /// Intended for use whenever a let binding occurs. Essentially, abusing 
+    ///
+    /// Intended for use whenever a let binding occurs. Essentially, abusing
     /// some notation, 1 gets converted to 2.
     /// ```
     /// 1. let x = 10;
-    /// 2. let x = site.bind("x", TaggedValue<10>) 
+    /// 2. let x = site.bind("x", TaggedValue<10>)
     /// ```
     pub fn bind<T>(&mut self, var_name: &str, tv: TaggedValue<T>) -> TaggedValue<T>
     where
@@ -381,9 +382,7 @@ impl ATI {
 
     /// Moves a value from a standard type T to a TaggedValue,
     /// assigning it a unique Id
-    pub fn track<T>(
-        value: T,
-    ) -> TaggedValue<T>
+    pub fn track<T>(value: T) -> TaggedValue<T>
     where
         T: Copy,
     {

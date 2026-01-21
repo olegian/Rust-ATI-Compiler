@@ -10,15 +10,22 @@ use rustc_span::{DUMMY_SP, Ident, Symbol};
 
 use crate::instrumentation::common;
 
+// I really hate this solution, but i can't think of a way
+// to map tracked ident -> &fn decl without introducing a lot
+// of complexity due to the borrows required
+pub struct FnInfo {
+    pub are_params_tracked: Vec<bool>,
+    pub is_return_tracked: bool,
+}
+
 pub struct ModifyParamsVisitor<'a> {
     psess: &'a ParseSess,
-    modified_functions: HashSet<Ident>,
+    modified_functions: HashSet<String>,
 }
 
 impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
     fn visit_item(&mut self, item: &mut ast::Item) {
         match item.kind {
-            // To all non-skipped function definitions, push on a u32
             ast::ItemKind::Fn(box ast::Fn {
                 ref mut ident,
                 sig: ast::FnSig { ref mut decl, .. },
@@ -29,7 +36,6 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
                     // that use some mod::submod::func_name() thing, might need to preserve
                     // the entire path as an identifier of the function, and use that in
                     // the modified_functions set.
-                    self.modified_functions.insert(*ident);
 
                     // go through parameters of function...
                     for ast::Param { ty, .. } in &mut decl.inputs {
@@ -46,8 +52,10 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
                             return_type.kind = self.tuple_type(return_type);
                         }
                     }
+
+                    self.modified_functions.insert(ident.as_str().into());
                 }
-            },
+            }
             ast::ItemKind::Struct(_, _, ast::VariantData::Struct { ref mut fields, .. }) => {
                 for field_def in fields {
                     if common::can_type_be_tupled(&*field_def.ty) {
@@ -56,6 +64,7 @@ impl<'a> MutVisitor for ModifyParamsVisitor<'a> {
                 }
             }
 
+            // method defs etc...
             _ => {}
         }
 
@@ -71,7 +80,7 @@ impl<'a> ModifyParamsVisitor<'a> {
         }
     }
 
-    pub fn get_modified_funcs(&self) -> &HashSet<Ident> {
+    pub fn get_modified_funcs(&self) -> &HashSet<String> {
         &self.modified_functions
     }
 
