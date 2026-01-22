@@ -109,7 +109,7 @@ pub struct FnInfo {
 impl FnInfo {
     /// Creates string representations of the statements from ati.rs required 
     /// to bind all input parameters to the enter and exit sites.
-    fn create_param_binds(&self) -> String {
+    fn create_param_binds(&self, site_name: &str) -> String {
         self.params
             .iter()
             .filter(|param| is_type_tupled(&param.ty))
@@ -118,8 +118,7 @@ impl FnInfo {
                     let param_name = ident.as_str();
                     format!(
                         r#"
-                        site_enter.bind(stringify!({param_name}), {param_name});
-                        site_exit.bind(stringify!({param_name}), {param_name});
+                        {site_name}.bind(stringify!({param_name}), {param_name});
                     "#
                     )
                 } else {
@@ -214,15 +213,16 @@ impl FnInfo {
     pub fn create_fn_stub(&self, name: &str) -> String {
         if name == "main" {
             // TODO: environment stuff for main
+            // this is kind of a silly stub for now...
             return format!(
                 r#"
                 fn main() {{
                     let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site(stringify!(main::ENTER));
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!(main::EXIT));
                     ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
 
                     main_unstubbed();
 
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!(main::EXIT));
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
                     ATI_ANALYSIS.lock().unwrap().report();
                 }}
@@ -230,7 +230,8 @@ impl FnInfo {
             );
         }
 
-        let param_binds = self.create_param_binds();
+        let enter_param_binds = self.create_param_binds("site_enter");
+        let exit_param_binds = self.create_param_binds("site_exit");
         let param_decls = self.create_param_decls();
         let params_passed = self.create_passed_params();
         let ret_ty = self.create_return_type();
@@ -242,12 +243,13 @@ impl FnInfo {
                 r#"
                 fn {name}({param_decls}) -> {ret_ty} {{
                     let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({name}::ENTER));
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({name}::EXIT));
-                    {param_binds}
+                    {enter_param_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
 
                     let res = {name}_unstubbed({params_passed});
 
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({name}::EXIT));
+                    {exit_param_binds}
                     site_exit.bind(stringify!(RET), res);
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
                     return res;
@@ -260,12 +262,13 @@ impl FnInfo {
                 r#"
                 fn {name}({param_decls}) {{
                     let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({name}::ENTER));
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({name}::EXIT));
-                    {param_binds}
+                    {enter_param_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
 
                     {name}_unstubbed({params_passed});
 
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({name}::EXIT));
+                    {exit_param_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
                     ATI_ANALYSIS.lock().unwrap().report();
                 }}
