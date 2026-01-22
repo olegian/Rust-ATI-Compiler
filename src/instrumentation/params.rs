@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use rustc_ast as ast;
 use rustc_ast::mut_visit::MutVisitor;
-use rustc_span::{DUMMY_SP, Ident, Symbol};
+use rustc_span::{DUMMY_SP, Ident};
 
 use crate::instrumentation::common::{self, FnInfo};
 
@@ -24,21 +24,14 @@ impl MutVisitor for UpdateFnDeclsVisitor {
                 let mut params = Vec::new();
                 // go through parameters of function...
                 for param in &mut decl.inputs {
-                    let ty = &mut param.ty;
-                    if common::can_type_be_tupled(ty) {
-                        // ... if type can be tupled, we need to convert the type to be
-                        // a TaggedValue<ty> to carry tracking info
-                        ty.kind = self.tuple_type(ty);
-                    }
-
+                    // ... and tuple any instances of basic types
+                    self.recursively_tuple_type(&mut param.ty);
                     params.push(Box::new(param.clone()));
                 }
 
                 if let ast::FnRetTy::Ty(ref mut return_type) = decl.output {
-                    if common::can_type_be_tupled(return_type) {
-                        // if return type exists and should also be tupled
-                        return_type.kind = self.tuple_type(return_type);
-                    }
+                    // do the same to the return type, if one exists
+                    self.recursively_tuple_type(return_type);
                 }
 
                 // store required info so that we can later make a stub version of this later
@@ -58,9 +51,7 @@ impl MutVisitor for UpdateFnDeclsVisitor {
             // Tags all values in struct that can be tupled
             ast::ItemKind::Struct(_, _, ast::VariantData::Struct { ref mut fields, .. }) => {
                 for field_def in fields {
-                    if common::can_type_be_tupled(&*field_def.ty) {
-                        field_def.ty.kind = self.tuple_type(&field_def.ty);
-                    }
+                    self.recursively_tuple_type(&mut field_def.ty);
                 }
             }
 
@@ -71,6 +62,7 @@ impl MutVisitor for UpdateFnDeclsVisitor {
 }
 
 impl UpdateFnDeclsVisitor {
+    /// Constructor
     pub fn new() -> Self {
         Self {
             modified_functions: HashMap::new(),
@@ -82,9 +74,9 @@ impl UpdateFnDeclsVisitor {
         &self.modified_functions
     }
 
-    /// Converts a type T into a TaggedValue<T>
-    fn tuple_type(&self, old_type: &ast::Ty) -> ast::TyKind {
-        ast::TyKind::Path(
+    /// Directly modifies a type T into a TaggedValue<T> in place.
+    fn tuple_type(&self, old_type: &mut ast::Ty) {
+        old_type.kind = ast::TyKind::Path(
             None,
             ast::Path {
                 segments: [ast::PathSegment {
@@ -102,6 +94,33 @@ impl UpdateFnDeclsVisitor {
                 span: DUMMY_SP,
                 tokens: None,
             },
-        )
+        );
+    }
+
+    /// Searches through type to find and tuple all simple types that should be tupled.
+    /// Modifies the type in place
+    fn recursively_tuple_type<'a>(&self, ty: &'a mut ast::Ty) {
+        if common::can_type_be_tupled(ty) {
+            self.tuple_type(ty);
+            return;
+        }
+
+        if let ast::TyKind::Path(_, path) = &mut ty.kind {
+            for segment in path.segments.iter_mut() {
+                if let Some(box ast::GenericArgs::AngleBracketed(ast::AngleBracketedArgs{
+                    args,
+                    ..
+                })) = &mut segment.args {
+                    for arg in args.iter_mut() {
+                        if let ast::AngleBracketedArg::Arg(ast::GenericArg::Type(ty)) = arg {
+                            self.recursively_tuple_type(ty);
+                        } else {
+                            // TODO: Lifetimes
+                            todo!();
+                        }
+                    }
+                }
+            }
+        }
     }
 }

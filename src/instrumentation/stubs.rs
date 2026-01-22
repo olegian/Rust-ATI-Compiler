@@ -25,6 +25,7 @@ pub fn create_stubs<'a>(
         .unwrap();
 
         loop {
+            // add all function stubs to crate
             match parser.parse_item(ForceCollect::No) {
                 Ok(Some(item)) => {
                     krate.items.insert(0, item);

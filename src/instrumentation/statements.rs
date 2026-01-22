@@ -33,6 +33,13 @@ impl<'modfuncs> MutVisitor for TupleLiteralsVisitor<'modfuncs> {
                     // down paths from crate::. Temporary workaround below,
                     // probably need to change it later.
 
+                    // TODO: Another problem, we have no way of knowing what type of 
+                    // value an untracked function will return. If it returns a basic type,
+                    // then it can be tupled as normal, but what if it returns a complex
+                    // type? a struct? a vec?
+                    // Further, what if a vec is supposed to store a tracked value?
+                    // the Vec.push operation is an "untracked" function, but we DO 
+                    // want to pass in a TaggedValue to it?
                     if let Some(last_segment) = path.segments.last() {
                         if !self
                             .modified_funcs
@@ -48,14 +55,20 @@ impl<'modfuncs> MutVisitor for TupleLiteralsVisitor<'modfuncs> {
                 }
             }
 
+            // WIP: with above TODOs regarding collections
+            // need to untuple to allow us to index arrays
+            ast::ExprKind::Index(_, ref mut index_expr, _) => {
+                index_expr.kind = self.unbind_tupled_expr(index_expr)
+            }
+
+            // TODO: handle macro invocationss similar to Call
             ast::ExprKind::MacCall(box ast::MacCall {
                 ref mut path,
                 ref mut args,
             }) => {
-                // TODO: handle macro invocations
             }
 
-            // TODO: handle method calls
+            // TODO: handle method calls?
             _ => {}
         }
     }

@@ -68,8 +68,7 @@ impl rustc_driver::Callbacks for Callbacks {
         Compilation::Continue
     }
 
-    /// Called after expansion. Return value instructs the compiler whether to
-    /// continue the compilation afterwards (defaults to `Compilation::Continue`)
+    // leaving the other callbacks just in case they are useful
     fn after_expansion<'tcx>(
         &mut self,
         _compiler: &interface::Compiler,
@@ -78,8 +77,6 @@ impl rustc_driver::Callbacks for Callbacks {
         Compilation::Continue
     }
 
-    /// Called after analysis. Return value instructs the compiler whether to
-    /// continue the compilation afterwards (defaults to `Compilation::Continue`)
     fn after_analysis<'tcx>(
         &mut self,
         _compiler: &interface::Compiler,

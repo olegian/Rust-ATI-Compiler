@@ -2,10 +2,8 @@ use rustc_ast as ast;
 use rustc_ast::Ty;
 use rustc_span::{sym};
 
-pub fn is_expr_tupled(expr_kind: &ast::ExprKind) -> bool {
-    !matches!(expr_kind, ast::ExprKind::Struct(_))
-}
-
+/// Returns true if the passed in node represents a type which 
+/// is tupled at the top level (does not search through generics)
 pub fn is_type_tupled(ty: &Ty) -> bool {
     if let ast::TyKind::Path(_, ast::Path { ref segments, .. }) = ty.kind {
         segments[0].ident.as_str() == "TaggedValue"
@@ -15,10 +13,10 @@ pub fn is_type_tupled(ty: &Ty) -> bool {
 }
 
 /// Determines whether or not the passed in type can be converted into
-/// a TaggedValue
-// this function is very similar to ast::TyKind::maybe_scalar
-// but I'm leaving it here so that we have more control over it
+/// a TaggedValue. Modify the below list to add/remove tupled types.
 pub fn can_type_be_tupled(ty: &Ty) -> bool {
+    // this function is very similar to ast::TyKind::maybe_scalar
+    // but I'm leaving it here so that we have more control over it
     let ty = ty.peel_refs(); // ignore & and &mut, we care about actual type
     let Some(ty_sym) = ty.kind.is_simple_path() else {
         return false; // unit type then, which idt we need to track at all
@@ -45,24 +43,23 @@ pub fn can_type_be_tupled(ty: &Ty) -> bool {
     )
 }
 
-/// Converts an ast Path Ty into the fully qualified type string,
-/// e.g. TaggedValue<Result<Option<u32>, ()>>.
+/// Converts an ast Path Ty into the full type string,
 // TODO: I'm actually not sure what this will do with unit types. Could just work automatically
 // TODO: probably a good idea to make this return a Result in case of poorly formatted type string
 pub fn expand_path_string(ty_path: &ast::Path) -> String {
-    // for each segment
     ty_path
         .segments
         .iter()
         .map(|segment| {
+            let ident = segment.ident.as_str().to_string();
+
             if let Some(box ast::GenericArgs::AngleBracketed(ast::AngleBracketedArgs {
                 args,
                 ..
             })) = &segment.args
             {
-                let ident = segment.ident.as_str().to_string();
-
-                // for each `< ... >` types in each segment
+                // recursively resolve generic type args:
+                // like Vec<Result<u32, ()>>
                 let bracketed = args
                     .iter()
                     .map(|arg| {
@@ -77,10 +74,10 @@ pub fn expand_path_string(ty_path: &ast::Path) -> String {
                             } else {
                                 // this should never happen, as the types in < ... > in a
                                 // path type should also be paths themselves
-                                unreachable!();
+                                panic!();
                             }
                         } else {
-                            // TODO: handle lifetimes ?
+                            // TODO: handle lifetimes (different GenericArg variant)?
                             todo!();
                         }
                     })
@@ -90,7 +87,7 @@ pub fn expand_path_string(ty_path: &ast::Path) -> String {
                 format!("{ident}<{bracketed}>")
             } else {
                 // no generic arguments in type string
-                segment.ident.as_str().to_string()
+                ident
             }
         })
         .collect::<Vec<_>>()
@@ -109,17 +106,18 @@ pub fn expand_path_string(ty_path: &ast::Path) -> String {
 //             .map(|seg| seg.ident.as_str())
 //             .collect::<Vec<_>>()
 //             .join("::");
-
 //         if path_str == "test" || path_str == "cfg" {
 //             return true;
 //         }
 //     }
 // }
 
-// I honestly don't like the Boxes here, feels like simple
-// references will live long enough and avoid unnecessary clones
+/// Stores all information discovered by the UpdateFnDeclsVisitor about functions
+/// that is necessary to create stub versions of all tracked functions.
 #[derive(Debug)]
 pub struct FnInfo {
+    // FIXME: I honestly don't like the Boxes here, feels like simple
+    // references will live long enough and avoid unnecessary clones
     pub params: Vec<Box<ast::Param>>,
     pub return_ty: Box<ast::FnRetTy>,
     // might want to add things like this to create full fledged stubs
