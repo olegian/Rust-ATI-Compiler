@@ -9,6 +9,10 @@ use rustc_span::FileName;
 use crate::instrumentation::common::FnInfo;
 
 
+/// Uses previously discovered modified function information to define new "stub functions"
+/// which dynamically create *::ENTER and *::EXIT sites, and then invoke the "unstubbed"
+/// functions. Note that function stubs retain the original name of the function,
+/// so that any uses of that function automatically invoke our stub instead.
 pub fn create_stubs<'a>(
     krate: &mut ast::Crate,
     psess: &ParseSess,
