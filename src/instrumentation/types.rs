@@ -4,10 +4,11 @@ use rustc_session::parse::ParseSess;
 use rustc_parse::{lexer::StripTokens, new_parser_from_source_str, parser::ForceCollect};
 use rustc_span::FileName;
 
+// TODO: should I make this an actual module import?? might lead to slightly cleaner code
+
 /// `file` must be a path to a .rs file containing required structs,
 /// enums, and thier associated impl blocks, to be added to the target
-/// program. This is essentially a module import.
-// TODO: should I make this an actual module import?? might lead to slightly cleaner code
+/// program. 
 pub fn define_types_from_file(file: &std::path::Path, psess: &ParseSess, krate: &mut ast::Crate) {
     let code: String = std::fs::read_to_string(file).unwrap();
 
@@ -39,13 +40,9 @@ pub fn define_types_from_file(file: &std::path::Path, psess: &ParseSess, krate: 
                 panic!("Failed to parse item from analysis.rs");
             }
         }
-
-        // TODO: is this necessary? not sure if the above Ok(None) catches all EOFs
-        // if parser.token.kind == rustc_ast::token::TokenKind::Eof {
-        //     break;
-        // }
     }
 
+    // actually add the stuff we've collected to the crate
     let items = imports.into_iter().chain(items.into_iter());
     for (i, item) in items.enumerate() {
         krate.items.insert(i, item);

@@ -250,12 +250,12 @@ impl Site {
 
 /// Manages multiple Sites at once, to allow for analyzing multiple functions
 pub struct Sites {
-    locs: HashMap<String, Site>,
+    locs: BTreeMap<String, Site>,
 }
 impl Sites {
     pub fn new() -> Self {
         Sites {
-            locs: HashMap::new(),
+            locs: BTreeMap::new(),
         }
     }
 
@@ -394,7 +394,7 @@ impl ATI {
         TaggedValue::new(value, id)
     }
 
-    /// Fetches a new site, or creates it, with the given name.
+    /// Fetches a site, or creates it, with the given name.
     pub fn get_site(&mut self, id: &str) -> Site {
         self.sites.extract(id)
     }
@@ -413,6 +413,7 @@ impl ATI {
         self.value_uf.union_tags(&tv1.1, &tv2.1);
     }
 
+    /// Produce output partition
     pub fn report(&self) {
         self.sites.report();
     }

@@ -1,21 +1,10 @@
 fn main() {
-    let a = 10;
-    let b = 20;
-    let c = a + b;
-
-    let d = 1;
-    let e = 2;
-    let f = max(d, e);
-
-    return;
+    foo(1, 2, 3);
 }
 
-fn max(x: u32, y: u32) -> u32 {
-    let res = if x < y {
-        y
-    } else {
-        x
-    };
+fn foo(x: u32, y: u32, z: u32) -> u32 {
+    let a = x + 100;
+    let b = a + y;
 
-    return res;
+    b
 }

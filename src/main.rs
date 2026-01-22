@@ -16,17 +16,19 @@ use rustc_driver::Compilation;
 use rustc_interface::interface;
 use rustc_middle::ty::TyCtxt;
 
-use std::{env, path::Path};
+use std::env;
 
 mod instrumentation;
-use crate::instrumentation::{ATIVisitor, ModifyParamsVisitor, define_types_from_file};
+use crate::instrumentation::{
+    TupleLiteralsVisitor, UpdateFnDeclsVisitor, create_stubs, define_types_from_file,
+};
 
-// included just for code analysis on ati.rs
+// included just for code analysis to run on ati.rs
 mod ati;
 
 // TODO: none of this code right now handles anything but pure functions.
-//       idk what to do with closures, and then associated functions need
-//       extra handling / visiting logic as well.
+// idk what to do with closures, and then associated functions need
+// extra handling / visiting logic as well.
 
 struct Callbacks {}
 impl rustc_driver::Callbacks for Callbacks {
@@ -41,24 +43,27 @@ impl rustc_driver::Callbacks for Callbacks {
         compiler: &interface::Compiler,
         krate: &mut ast::Crate,
     ) -> Compilation {
-        // double formals for tags, and also pass around ATI struct between functions
-        let mut modify_params_visitor = ModifyParamsVisitor::new();
+        // discovers all functions that will be instrumented, and updates
+        // the function signatures to tag all passed values as necessary
+        let mut modify_params_visitor = UpdateFnDeclsVisitor::new();
         modify_params_visitor.visit_crate(krate);
-
         let modified_funcs = modify_params_visitor.get_modified_funcs();
-        // mutate each function body to add preludes, epilogues, and unifications
-        let mut visitor = ATIVisitor::new(&compiler.sess.psess, modified_funcs);
+
+        // tuple all literals to create tags, untupling as necessary
+        // when they are passed into untracked functions
+        let mut visitor = TupleLiteralsVisitor::new(modified_funcs);
         visitor.visit_crate(krate);
 
-        // add required ATI types to crate
+        // create all required function stubs, which perform site management
+        create_stubs(krate, &compiler.sess.psess, modified_funcs);
+
+        // define all used ATI types from ati.rs
+        let cwd = std::env::current_dir().unwrap();
         define_types_from_file(
-            // TODO: reference this file in a better way
-            Path::new("/home/olegian/TRACTOR/queries/src/ati/ati.rs"),
+            &cwd.join("src/ati/ati.rs"),
             &compiler.sess.psess,
             krate,
         );
-
-        // rustc_driver::pretty::print(&compiler.sess, rustc_session::config::PpMode::AstTree, rustc_driver::pretty::PrintExtra::AfterParsing { krate: &krate });
 
         Compilation::Continue
     }
@@ -84,6 +89,7 @@ impl rustc_driver::Callbacks for Callbacks {
     }
 }
 
+/// Entry-point, forwards all arguments to rustc
 pub fn main() {
     let args: Vec<_> = env::args().collect();
     let mut cbs = Callbacks {};

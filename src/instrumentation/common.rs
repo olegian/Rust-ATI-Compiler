@@ -1,6 +1,6 @@
 use rustc_ast as ast;
 use rustc_ast::Ty;
-use rustc_span::{Ident, sym};
+use rustc_span::{sym};
 
 pub fn is_expr_tupled(expr_kind: &ast::ExprKind) -> bool {
     !matches!(expr_kind, ast::ExprKind::Struct(_))
@@ -45,26 +45,59 @@ pub fn can_type_be_tupled(ty: &Ty) -> bool {
     )
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum AtiFnType {
-    Main,
-    Tracked,
-    Untracked,
+/// Converts an ast Path Ty into the fully qualified type string,
+/// e.g. TaggedValue<Result<Option<u32>, ()>>.
+// TODO: I'm actually not sure what this will do with unit types. Could just work automatically
+// TODO: probably a good idea to make this return a Result in case of poorly formatted type string
+pub fn expand_path_string(ty_path: &ast::Path) -> String {
+    // for each segment
+    ty_path
+        .segments
+        .iter()
+        .map(|segment| {
+            if let Some(box ast::GenericArgs::AngleBracketed(ast::AngleBracketedArgs {
+                args,
+                ..
+            })) = &segment.args
+            {
+                let ident = segment.ident.as_str().to_string();
+
+                // for each `< ... >` types in each segment
+                let bracketed = args
+                    .iter()
+                    .map(|arg| {
+                        if let ast::AngleBracketedArg::Arg(ast::GenericArg::Type(ty)) = arg {
+                            if let box ast::Ty {
+                                kind: ast::TyKind::Path(_, path),
+                                ..
+                            } = ty
+                            {
+                                // recursively expand those types
+                                expand_path_string(path)
+                            } else {
+                                // this should never happen, as the types in < ... > in a
+                                // path type should also be paths themselves
+                                unreachable!();
+                            }
+                        } else {
+                            // TODO: handle lifetimes ?
+                            todo!();
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                format!("{ident}<{bracketed}>")
+            } else {
+                // no generic arguments in type string
+                segment.ident.as_str().to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("::")
 }
 
-/// Returns whether the passed in functions are tracked or not.
-pub fn function_type(ident: &Ident, attrs: &[ast::Attribute]) -> AtiFnType {
-    // leaving this here to let us easily map more specific stuff later
-    // "" => AtiFnType::Tracked
-    // _ => AtiFnType::Untracked
-    match ident.as_str() {
-        "main" => AtiFnType::Main,
-        _ => AtiFnType::Tracked,
-    }
-}
-
-// TODO: figure out how to define untracked funcs
-// fun fact, you can pull a lot more info off of the item:
+// fun fact, you can pull a lot more info off of the item node:
 // i.e. skip test functions.
 // for attr in attrs {
 //     if let ast::AttrKind::Normal(normal_attr) = &attr.kind {
@@ -82,3 +115,180 @@ pub fn function_type(ident: &Ident, attrs: &[ast::Attribute]) -> AtiFnType {
 //         }
 //     }
 // }
+
+// I honestly don't like the Boxes here, feels like simple
+// references will live long enough and avoid unnecessary clones
+#[derive(Debug)]
+pub struct FnInfo {
+    pub params: Vec<Box<ast::Param>>,
+    pub return_ty: Box<ast::FnRetTy>,
+    // might want to add things like this to create full fledged stubs
+    // visibility:
+}
+
+impl FnInfo {
+    /// Creates string representations of the statements from ati.rs required 
+    /// to bind all input parameters to the enter and exit sites.
+    fn create_param_binds(&self) -> String {
+        self.params
+            .iter()
+            .filter(|param| is_type_tupled(&param.ty))
+            .map(|param| {
+                if let ast::PatKind::Ident(_, ref ident, _) = param.pat.kind {
+                    let param_name = ident.as_str();
+                    format!(
+                        r#"
+                        site_enter.bind(stringify!({param_name}), {param_name});
+                        site_exit.bind(stringify!({param_name}), {param_name});
+                    "#
+                    )
+                } else {
+                    unreachable!();
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
+    /// Reads in self.params and constructs the string
+    /// of parameter declarations to use for this function
+    /// 
+    /// In other words, returns the string described by <...>
+    /// `fn my_foo(< a: u32, b: f64 >);`
+    // FIXME: probably combined this function with create_passed_params
+    fn create_param_decls(&self) -> String {
+        self.params
+            .iter()
+            .map(|param| {
+                if let ast::Param {
+                    pat:
+                        box ast::Pat {
+                            kind: ast::PatKind::Ident(_, ref ident, _),
+                            ..
+                        },
+                    ty:
+                        box ast::Ty {
+                            kind: ast::TyKind::Path(_, ref path),
+                            ..
+                        },
+                    ..
+                } = **param
+                {
+                    let param_name = ident.as_str();
+                    let param_ty = expand_path_string(path);
+
+                    format!(r#"{param_name}: {param_ty}"#)
+                } else {
+                    unreachable!();
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// Reads in self.params and constructs the string
+    /// of parameters to pass into the *_unstubbed version 
+    /// of the function.
+    /// 
+    /// In other words, returns the string described by <...>
+    /// `let res = foo_unstubbed(< a, b >);``
+    fn create_passed_params(&self) -> String {
+        self.params
+            .iter()
+            .map(|param| {
+                if let ast::Param {
+                    pat:
+                        box ast::Pat {
+                            kind: ast::PatKind::Ident(_, ref ident, _),
+                            ..
+                        },
+                    ..
+                } = **param
+                {
+                    ident.as_str()
+                } else {
+                    unreachable!();
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// Reads self.return_ty and converts the node
+    /// into a regular type string. Return None if
+    /// the return type is ().
+    fn create_return_type(&self) -> Option<String> {
+        if let ast::FnRetTy::Ty(box ast::Ty {
+            kind: ast::TyKind::Path(_, ref path),
+            ..
+        }) = *self.return_ty
+        {
+            Some(expand_path_string(path))
+        } else {
+            None
+        }
+    }
+
+    /// Creates function stubs that manage ::ENTER and ::EXIT information,
+    /// and properly invoke the function described by self.
+    pub fn create_fn_stub(&self, name: &str) -> String {
+        if name == "main" {
+            // TODO: environment stuff for main
+            return format!(
+                r#"
+                fn main() {{
+                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site(stringify!(main::ENTER));
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!(main::EXIT));
+                    ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
+
+                    main_unstubbed();
+
+                    ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
+                    ATI_ANALYSIS.lock().unwrap().report();
+                }}
+            "#
+            );
+        }
+
+        let param_binds = self.create_param_binds();
+        let param_decls = self.create_param_decls();
+        let params_passed = self.create_passed_params();
+        let ret_ty = self.create_return_type();
+        if let Some(ret_ty) = ret_ty {
+            // with a return value
+            format!(
+                r#"
+                fn {name}({param_decls}) -> {ret_ty} {{
+                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({name}::ENTER));
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({name}::EXIT));
+                    {param_binds}
+                    ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
+
+                    let res = {name}_unstubbed({params_passed});
+
+                    site_exit.bind(stringify!(RET), res);
+                    ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
+                    return res;
+                }}
+            "#
+            )
+        } else {
+            // without a return value
+            format!(
+                r#"
+                fn {name}({param_decls}) {{
+                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({name}::ENTER));
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(stringify!({name}::EXIT));
+                    {param_binds}
+                    ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
+
+                    {name}_unstubbed({params_passed});
+
+                    ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
+                    ATI_ANALYSIS.lock().unwrap().report();
+                }}
+            "#
+            )
+        }
+    }
+}
