@@ -1,3 +1,5 @@
+// Note: to run this, you need the nightly build of cargo downloaded and 
+// that whole toolchain setup. This is required to access these crates below.
 #![feature(rustc_private)]
 #![feature(box_patterns)]
 

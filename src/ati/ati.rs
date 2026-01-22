@@ -6,6 +6,8 @@ use std::{
 
 pub type Id = u64;
 
+/// Top-level global that owns all information about all value interactions
+/// and ATI site states.
 pub static ATI_ANALYSIS: LazyLock<Arc<Mutex<ATI>>> =
     LazyLock::new(|| Arc::new(Mutex::new(ATI::new())));
 
@@ -68,6 +70,7 @@ where
     }
 }
 
+/// View TaggedValue docstring.
 impl<T> Add<TaggedValue<T>> for TaggedValue<T>
 where
     T: Add<Output = T> + Copy,
@@ -172,7 +175,7 @@ where
 
 // MARK: site.rs
 /// Represents a Site under analysis, ultimately a mapping of in-scope
-/// variables to thier values at the end of each function.
+/// variables to thier values at the start and end of each function.
 #[derive(Debug)]
 pub struct Site {
     type_uf: UnionFind,
@@ -192,20 +195,12 @@ impl Site {
         }
     }
 
-    /// Records that a particular `tv: TaggedValue<T>` was passed as a param
-    /// named `var_name` into the current Site.
-    pub fn bind_param<T>(&mut self, var_name: &str, tv: &TaggedValue<T>)
-    where
-        T: Copy,
-    {
-        self.observed_var_tags.push((var_name.into(), tv.1));
-    }
-
     /// Records that a particular `tv: TaggedValue<T>` was bound to a variable
     /// named `var_name`.
     ///
     /// Intended for use whenever a let binding occurs. Essentially, abusing
-    /// some notation, 1 gets converted to 2.
+    /// some notation, 1 gets converted to 2. Can also be used to record parameters
+    /// or return values, as long as it's properly formatted.
     /// ```
     /// 1. let x = 10;
     /// 2. let x = site.bind("x", TaggedValue<10>)
@@ -218,7 +213,7 @@ impl Site {
         tv
     }
 
-    /// Algorithm from paper
+    /// Algorithm from paper, updates ATI information based on observed_vars
     pub fn update(&mut self, value_uf: &mut UnionFind) {
         for (new_var, new_var_tag) in &self.observed_var_tags {
             let new_leader_tag = value_uf.find(new_var_tag).unwrap(); // ? is this unwrap safe? 
@@ -236,9 +231,11 @@ impl Site {
                 self.var_tags.insert(new_var.clone(), new_leader_tag);
             }
         }
+
+        self.observed_var_tags.clear(); // done merging this in!
     }
 
-    /// Produces output, called at the end of main.
+    /// Produces ATI output, called at the end of main.
     pub fn report(&self) {
         println!("{}", self.name);
         for (var, tag) in self.var_tags.iter() {
@@ -259,7 +256,8 @@ impl Sites {
         }
     }
 
-    /// Pulls a site out of the global, for local modification
+    /// Pulls a site out of the map, for local modification.
+    /// If no site with `id` exists, creates a new one.
     pub fn extract(&mut self, id: &str) -> Site {
         if !self.locs.contains_key(id) {
             Site::new(id)
@@ -268,7 +266,7 @@ impl Sites {
         }
     }
 
-    /// Puts a site that was locally modified back into the global
+    /// Puts a site that was locally modified back into the map.
     pub fn stash(&mut self, site: Site) {
         self.locs.insert(site.name.clone(), site);
     }
@@ -399,7 +397,8 @@ impl ATI {
         self.sites.extract(id)
     }
 
-    /// Introduce current site state into the analysis
+    /// Update abstract types at this site, then store it back
+    /// into the map. Call whenever you are done adding variables to a site.
     pub fn update_site(&mut self, mut site: Site) {
         site.update(&mut self.value_uf);
         self.sites.stash(site);

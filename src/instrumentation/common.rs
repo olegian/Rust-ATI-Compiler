@@ -94,24 +94,6 @@ pub fn expand_path_string(ty_path: &ast::Path) -> String {
         .join("::")
 }
 
-// fun fact, you can pull a lot more info off of the item node:
-// i.e. skip test functions.
-// for attr in attrs {
-//     if let ast::AttrKind::Normal(normal_attr) = &attr.kind {
-//         let path_str = normal_attr
-//             .item
-//             .path
-//             .segments
-//             .iter()
-//             .map(|seg| seg.ident.as_str())
-//             .collect::<Vec<_>>()
-//             .join("::");
-//         if path_str == "test" || path_str == "cfg" {
-//             return true;
-//         }
-//     }
-// }
-
 /// Stores all information discovered by the UpdateFnDeclsVisitor about functions
 /// that is necessary to create stub versions of all tracked functions.
 #[derive(Debug)]
@@ -252,6 +234,8 @@ impl FnInfo {
         let param_decls = self.create_param_decls();
         let params_passed = self.create_passed_params();
         let ret_ty = self.create_return_type();
+        // TODO: do we want to add the params to site_exit before or after the function executes?
+        // as in, do we do the site_exit stuff before *_unstubbed, or after?
         if let Some(ret_ty) = ret_ty {
             // with a return value
             format!(
@@ -290,3 +274,21 @@ impl FnInfo {
         }
     }
 }
+
+// fun fact, you can pull a lot more info off of the item node:
+// i.e. skip test functions.
+// for attr in attrs {
+//     if let ast::AttrKind::Normal(normal_attr) = &attr.kind {
+//         let path_str = normal_attr
+//             .item
+//             .path
+//             .segments
+//             .iter()
+//             .map(|seg| seg.ident.as_str())
+//             .collect::<Vec<_>>()
+//             .join("::");
+//         if path_str == "test" || path_str == "cfg" {
+//             return true;
+//         }
+//     }
+// }
