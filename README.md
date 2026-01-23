@@ -1,7 +1,6 @@
 # DATIR: Dynamic Abstract Type Inference in Rust
 This repository contains all the code necessary to automatically insert instrumentation into arbitrary Rust source code, to perform abstract type inference (ATI). This project is loosely based on [dynamic inference of abstract types](https://dl.acm.org/doi/10.1145/1146238.1146268).
 
-
 ## Using This Repository
 This instrumentation relies on `rustc`'s query system to execute callbacks. This requires linking against `rustc`'s nightly build. To do so, run the following bash [commands](https://rust-lang.github.io/rustup/installation/index.html):
 
@@ -37,6 +36,7 @@ The following files make up the majority of the implementation:
 
 ## Output
 The exact form of output is governed by `src/ati/ati.rs::ATI::report()`. This function is invoked right before `main` exits. Currently, the output is just written to stdout, starting with `===ATI-ANALYSIS-START===`. For example, the following output is produced by instrumenting and executing a simple program which has `main` invoke another function `foo`, which accepts three parameters `x`, `y`, and `z` (`tests/simple/input.rs`). The values of `x` and `y` are used to compute the return value, `RET`.
+
 ```
 ===ATI-ANALYSIS-START===
 foo::ENTER
@@ -55,6 +55,7 @@ main::ENTER
 main::EXIT
 ---
 ```
+
 This instrumentation only reports the abstract types of formals and return values, ultimately to construct a program specification.
 
 ## Features yet to be implemented:
