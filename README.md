@@ -64,4 +64,7 @@ The following is a list of features still in progress:
 1. Instrumenting multi-file projects. The current version only supports instrumentation of a single file.
 2. Collections (like `Vec`) are currently unsupported.
     - In general, non-user defined functions which return complex types will break instrumentation.
-3. Undoubtedly much more!
+3. Methods implemented on structs or enums
+4. Enums
+5. Closures
+6. Lifetimes in type definitions

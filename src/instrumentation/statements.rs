@@ -1,26 +1,34 @@
+/* Defines a visitor which tags all primitives that can be tagged,
+ * based on the common::can_literal_be_tupled function. Further,
+ * finds uses of these values that require them to be "untupled" 
+ * within tracked functions (like when passed to an untracked function),
+ * unbinding the tag from the value in that case (TaggedValue<T> -> T).
+*/
 use std::collections::HashMap;
 
 use rustc_ast as ast;
 use rustc_ast::mut_visit::{self, MutVisitor};
 use rustc_span::{DUMMY_SP, Ident};
 
-use crate::instrumentation::common::FnInfo;
+use crate::instrumentation::common::{self, FnInfo};
 
 pub struct TupleLiteralsVisitor<'modfuncs> {
     modified_funcs: &'modfuncs HashMap<String, FnInfo>,
 }
 
 impl<'modfuncs> MutVisitor for TupleLiteralsVisitor<'modfuncs> {
-    // Converts all literals into TaggedValue<T>'s
-    // and makes sure those values are correctly passed
-    // between the tracked/untracked boundary.
+    /// Converts all literals into TaggedValue<T>'s
+    /// while making sure those values are correctly passed
+    /// between the tracked/untracked boundary.
     fn visit_expr(&mut self, expr: &mut ast::Expr) {
         mut_visit::walk_expr(self, expr);
 
         match expr.kind {
-            // Convert all literals into TaggedValues
-            ast::ExprKind::Lit(_) => {
-                *expr = self.tupleify_expr(expr);
+            // Convert all literals into TaggedValues, if necessary
+            ast::ExprKind::Lit(lit) => {
+                if common::can_literal_be_tupled(&lit) {
+                    *expr = self.tupleify_expr(expr);
+                }
             }
 
             // Convert all invocations of untracked functions
@@ -56,7 +64,8 @@ impl<'modfuncs> MutVisitor for TupleLiteralsVisitor<'modfuncs> {
             }
 
             // WIP: with above TODOs regarding collections
-            // need to untuple to allow us to index arrays
+            // need to untuple to allow us to actually index slices, vectors, etc
+            // could this be done by overriding the index operator?
             ast::ExprKind::Index(_, ref mut index_expr, _) => {
                 index_expr.kind = self.unbind_tupled_expr(index_expr)
             }
@@ -120,7 +129,7 @@ impl<'modfuncs> TupleLiteralsVisitor<'modfuncs> {
     }
 
     /// Takes a TaggedValue<T> expression and unwraps it to just T,
-    /// by accessing the TaggedValue's 0'th field
+    /// by accessing the TaggedValue's 0'th field.
     fn unbind_tupled_expr(&self, expr: &mut ast::Expr) -> ast::ExprKind {
         ast::ExprKind::Field(
             Box::new(expr.clone()),

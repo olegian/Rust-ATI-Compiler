@@ -1,3 +1,7 @@
+/* Creates function stubs for each tracked function discovered 
+ * by the visitor in params.rs. Each stub sets up enter and exit
+ * sites before invoking the actual function.
+*/
 use std::collections::HashMap;
 
 use rustc_ast as ast;
@@ -7,7 +11,6 @@ use rustc_session::parse::ParseSess;
 use rustc_span::FileName;
 
 use crate::instrumentation::common::FnInfo;
-
 
 /// Uses previously discovered modified function information to define new "stub functions"
 /// which dynamically create *::ENTER and *::EXIT sites, and then invoke the "unstubbed"
@@ -20,6 +23,7 @@ pub fn create_stubs<'a>(
 ) {
     for (name, fn_info) in modified_functions.iter() {
         let code = fn_info.create_fn_stub(name);
+
         let mut parser = new_parser_from_source_str(
             psess,
             FileName::anon_source_code(&code),
@@ -35,6 +39,7 @@ pub fn create_stubs<'a>(
                     krate.items.insert(0, item);
                 }
                 Ok(None) => {
+                    // EOF
                     break;
                 }
                 Err(diag) => {

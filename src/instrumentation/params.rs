@@ -1,3 +1,8 @@
+/* Defines the visitor which edits all type signatures and definitions to 
+ * wrap primitive types T into TaggedValue<T> (defined in ati.rs). 
+ * After this pass, all declared types should be in a form which allows
+ * unique tags to be carried alongside values.
+*/
 use std::collections::HashMap;
 
 use rustc_ast as ast;
@@ -6,6 +11,8 @@ use rustc_span::{DUMMY_SP, Ident};
 
 use crate::instrumentation::common::{self, FnInfo};
 
+// FIXME: this deserves a better name.
+// it does more than functions after all
 pub struct UpdateFnDeclsVisitor {
     modified_functions: HashMap<String, FnInfo>,
 }
@@ -69,7 +76,8 @@ impl UpdateFnDeclsVisitor {
         }
     }
 
-    /// Extract the set of functions this visitor has discovered and considered tracked
+    /// Extract the information regarding functions that this visitor has 
+    /// discovered and considered tracked
     pub fn get_modified_funcs(&self) -> &HashMap<String, FnInfo> {
         &self.modified_functions
     }
@@ -97,8 +105,8 @@ impl UpdateFnDeclsVisitor {
         );
     }
 
-    /// Searches through type to find and tuple all simple types that should be tupled.
-    /// Modifies the type in place
+    /// Searches through type `ty` to find and tuple all primitive types 
+    /// that should be tupled. Modifies the type in place.
     fn recursively_tuple_type<'a>(&self, ty: &'a mut ast::Ty) {
         if common::can_type_be_tupled(ty) {
             self.tuple_type(ty);

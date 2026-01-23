@@ -1,3 +1,22 @@
+/* Defines all types used to perform dynamic ATI. Every type in this file
+ * is also defined in the instrumented code by `types.rs`.
+ *
+ * Key points include: 
+ * 1. `struct ATI` - A single global instance of this struct exists in the program
+ *    accessible everywhere within the instrumented files, which holds the value_uf
+ *    UnionFind (tracking all value interaction, globally) alongside the actual 
+ *    abstract type partition at each site. All interactions with ATI instrumentation
+ *    are done by calling methods associated with this struct.
+ * 2. `struct TaggedValue<T>` - a tuple of (T, Id), which implements all necessary
+ *    operators on T to record interactions within the value_uf, when they happen.
+ * 3. `struct Site` - A program point, created in stubs, which stores the abstract 
+ *    types of variables registered to it.
+ * 4. `struct Sites` - Maintains a collection of program points, all the sites in the 
+ *    instrumented file.
+ * 5. `struct UnionFind` - A simple union find data structure, with some classic rank
+ *    optimization.
+*/
+
 use std::sync::{Arc, LazyLock, Mutex};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -11,7 +30,6 @@ pub type Id = u64;
 pub static ATI_ANALYSIS: LazyLock<Arc<Mutex<ATI>>> =
     LazyLock::new(|| Arc::new(Mutex::new(ATI::new())));
 
-// MARK: tag.rs
 /// Generates incrementing tags of type `Id`, with each call to `tag()`
 #[derive(Debug)]
 pub struct Tagger {
@@ -173,7 +191,6 @@ where
     }
 }
 
-// MARK: site.rs
 /// Represents a Site under analysis, ultimately a mapping of in-scope
 /// variables to thier values at the start and end of each function.
 #[derive(Debug)]
@@ -232,7 +249,7 @@ impl Site {
             }
         }
 
-        self.observed_var_tags.clear(); // done merging this in!
+        self.observed_var_tags.clear(); // done merging these vars in!
     }
 
     /// Produces ATI output, called at the end of main.
@@ -280,7 +297,6 @@ impl Sites {
     }
 }
 
-// MARK: union_find.rs
 /// Basic UnionFind implementation, with some light rank optimization.
 #[derive(Debug)]
 pub struct UnionFind {
@@ -292,6 +308,7 @@ pub struct UnionFind {
 }
 
 impl UnionFind {
+    /// Constructor
     pub fn new() -> Self {
         Self {
             id_to_index: HashMap::new(),
@@ -302,11 +319,15 @@ impl UnionFind {
         }
     }
 
+    /// Creates a new set in the union find, returning
+    /// an Id that corresponds to it.
     pub fn make_set(&mut self) -> Id {
         let id = self.tagger.tag();
         self.introduce_tag(id)
     }
 
+    /// Adds the passed in id to the UnionFind, in it's own set.
+    /// If a set already exists for this Id, does nothing.
     pub fn introduce_tag(&mut self, id: Id) -> Id {
         if self.id_to_index.contains_key(&id) {
             return id;
@@ -321,22 +342,28 @@ impl UnionFind {
         return id;
     }
 
+    /// Gets the index in parent associated with this id.
     fn get_index(&self, id: &Id) -> Option<usize> {
         self.id_to_index.get(id).copied()
     }
-    pub fn find(&mut self, tag: &Id) -> Option<Id> {
-        let index = self.get_index(tag)?;
+
+    /// Finds the parent Id which represents the leader of the set
+    /// which contains `id`.
+    pub fn find(&mut self, id: &Id) -> Option<Id> {
+        let index = self.get_index(id)?;
         let leader_index = self.find_index(index);
         Some(self.index_to_set[leader_index].clone())
     }
 
-    pub fn union_tags(&mut self, t1: &Id, t2: &Id) -> Option<Id> {
-        let i1 = self.get_index(t1)?;
-        let i2 = self.get_index(t2)?;
+    /// Associates the set represented by id1 and id2
+    pub fn union_tags(&mut self, id1: &Id, id2: &Id) -> Option<Id> {
+        let i1 = self.get_index(id1)?;
+        let i2 = self.get_index(id2)?;
         let leader_index = self.union_indices(i1, i2);
         Some(self.index_to_set[leader_index].clone())
     }
 
+    /// Finds the parent index of the set at index `x` of self.parent
     fn find_index(&mut self, x: usize) -> usize {
         if self.parent[x] != x {
             self.parent[x] = self.find_index(self.parent[x]);
@@ -344,6 +371,8 @@ impl UnionFind {
         self.parent[x]
     }
 
+    /// Associates the indecies `x` and `y` together, putting them
+    /// in the same set.
     fn union_indices(&mut self, x: usize, y: usize) -> usize {
         let x_root = self.find_index(x);
         let y_root = self.find_index(y);
@@ -366,7 +395,6 @@ impl UnionFind {
     }
 }
 
-// MARK: ati.rs
 /// This struct owns all necessary information for analysis.
 pub struct ATI {
     value_uf: UnionFind,
@@ -382,7 +410,7 @@ impl ATI {
         }
     }
 
-    /// Moves a value from a standard type T to a TaggedValue,
+    /// Moves a value from a standard type T to a TaggedValue<T>,
     /// assigning it a unique Id
     pub fn track<T>(value: T) -> TaggedValue<T>
     where
@@ -393,18 +421,19 @@ impl ATI {
     }
 
     /// Fetches a site, or creates it, with the given name.
-    pub fn get_site(&mut self, id: &str) -> Site {
-        self.sites.extract(id)
+    pub fn get_site(&mut self, name: &str) -> Site {
+        self.sites.extract(name)
     }
 
     /// Update abstract types at this site, then store it back
-    /// into the map. Call whenever you are done adding variables to a site.
+    /// into the map. Call whenever you are done registering variables to a site.
     pub fn update_site(&mut self, mut site: Site) {
         site.update(&mut self.value_uf);
         self.sites.stash(site);
     }
 
-    /// Observe two tags interacting
+    /// Observe two tagged values interacting together, merging them in 
+    /// value_uf.
     pub fn union_tags<T>(&mut self, tv1: &TaggedValue<T>, tv2: &TaggedValue<T>)
     where
         T: Copy,
@@ -412,7 +441,7 @@ impl ATI {
         self.value_uf.union_tags(&tv1.1, &tv2.1);
     }
 
-    /// Produce output partition
+    /// Produce output partition that defines abstract types.
     pub fn report(&self) {
         self.sites.report();
     }

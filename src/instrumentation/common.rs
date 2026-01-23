@@ -1,10 +1,16 @@
+/* Provides helper functions that are used throughout this entire project.
+ * Namely, this includes determining the set of types that are considered
+ * able to be tagged, and carrying tracked function information from the
+ * point where they are discovered by the visitor in params.rs, to the point
+ * where stubs are created, in stubs.rs.
+*/
 use rustc_ast as ast;
-use rustc_ast::Ty;
+use rustc_ast::{Ty, token::{Lit, LitKind}};
 use rustc_span::{sym};
 
 /// Returns true if the passed in node represents a type which 
-/// is tupled at the top level (does not search through generics)
-pub fn is_type_tupled(ty: &Ty) -> bool {
+/// is tupled at the top level (does not recursively search through generics)
+fn is_type_tupled(ty: &Ty) -> bool {
     if let ast::TyKind::Path(_, ast::Path { ref segments, .. }) = ty.kind {
         segments[0].ident.as_str() == "TaggedValue"
     } else {
@@ -12,11 +18,18 @@ pub fn is_type_tupled(ty: &Ty) -> bool {
     }
 }
 
+/// Determines whether or not the passed in literal can be converted
+/// into a TaggedValue. Modify the below list to enable/disable tupling literals.
+pub fn can_literal_be_tupled(lit: &Lit) -> bool {
+    matches!(lit.kind, LitKind::Integer | LitKind::Float)
+}
+
 /// Determines whether or not the passed in type can be converted into
 /// a TaggedValue. Modify the below list to add/remove tupled types.
 pub fn can_type_be_tupled(ty: &Ty) -> bool {
     // this function is very similar to ast::TyKind::maybe_scalar
     // but I'm leaving it here so that we have more control over it
+
     let ty = ty.peel_refs(); // ignore & and &mut, we care about actual type
     let Some(ty_sym) = ty.kind.is_simple_path() else {
         return false; // unit type then, which idt we need to track at all
@@ -44,9 +57,9 @@ pub fn can_type_be_tupled(ty: &Ty) -> bool {
 }
 
 /// Converts an ast Path Ty into the full type string,
-// TODO: I'm actually not sure what this will do with unit types. Could just work automatically
-// TODO: probably a good idea to make this return a Result in case of poorly formatted type string
-pub fn expand_path_string(ty_path: &ast::Path) -> String {
+// FIXME: I'm actually not sure what this will do with unit types. 
+// FIXME: probably a good idea to make this return a Result in case of poorly formatted type strings
+fn expand_path_string(ty_path: &ast::Path) -> String {
     ty_path
         .segments
         .iter()
@@ -132,10 +145,10 @@ impl FnInfo {
     /// Reads in self.params and constructs the string
     /// of parameter declarations to use for this function
     /// 
-    /// In other words, returns the string described by <...>
+    /// In other words, returns the string described by <...>:
     /// `fn my_foo(< a: u32, b: f64 >);`
-    // FIXME: probably combined this function with create_passed_params
     fn create_param_decls(&self) -> String {
+        // FIXME: probably combined this function with create_passed_params
         self.params
             .iter()
             .map(|param| {
@@ -235,8 +248,9 @@ impl FnInfo {
         let param_decls = self.create_param_decls();
         let params_passed = self.create_passed_params();
         let ret_ty = self.create_return_type();
+
         // TODO: do we want to add the params to site_exit before or after the function executes?
-        // as in, do we do the site_exit stuff before *_unstubbed, or after?
+        // as in, do we do the site_exit stuff before *_unstubbed, or after? does it matter?
         if let Some(ret_ty) = ret_ty {
             // with a return value
             format!(
