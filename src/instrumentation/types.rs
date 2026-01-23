@@ -1,10 +1,15 @@
+/* Defines a function which reads a file, parses it, and adds every single 
+ * type definition into the crate being instrumented. This is used to effectively
+ * import a file at compile time, providing access to the necessary definitions to 
+ * perform ATI.
+*/
 use rustc_ast as ast;
 use rustc_session::parse::ParseSess;
 
 use rustc_parse::{lexer::StripTokens, new_parser_from_source_str, parser::ForceCollect};
 use rustc_span::FileName;
 
-// TODO: should I make this an actual module import?? might lead to slightly cleaner code?
+// FIXME: should I make this an actual module import?? might lead to slightly cleaner code?
 
 /// `file` must be a path to a .rs file containing required struct defs,
 /// enum defs, and thier associated impl blocks, to be added to the target
