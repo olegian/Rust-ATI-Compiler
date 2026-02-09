@@ -1,5 +1,5 @@
 /* Entry point file for DATIR.
- * This file defines the callbacks that are then passed to the rustc_driver 
+ * This file defines the callbacks that are then passed to the rustc_driver
  * invocation in main. View the `Callbacks` struct below, which currently only
  * takes advantage of a single callback function, for more information.
 */
@@ -8,6 +8,7 @@
 
 // It's okay if rust-analyzer is struggling to resolve these crates.
 // If you followed the direction in the README to add the necessary rustup
+// MDE: What is "everything"?  Just rust-analyzer?
 // components, everything should work fine!
 
 extern crate rustc_ast;
@@ -29,12 +30,14 @@ use std::env;
 
 mod instrumentation;
 use crate::instrumentation::{
-    TupleLiteralsVisitor, UpdateFnDeclsVisitor, create_stubs, define_types_from_file,
+    create_stubs, define_types_from_file, TupleLiteralsVisitor, UpdateFnDeclsVisitor,
 };
 
+// MDE: What does "run on" mean?  Is this for dogfooding?
 // included just for code analysis to run on ati.rs
 mod ati;
 
+// MDE: This needs documentation.
 struct Callbacks {}
 impl rustc_driver::Callbacks for Callbacks {
     /// Called before creating the compiler instance
@@ -48,9 +51,10 @@ impl rustc_driver::Callbacks for Callbacks {
         compiler: &interface::Compiler,
         krate: &mut ast::Crate,
     ) -> Compilation {
+        // MDE: The repository needs a description of the algorithm.  Without that, tagging and "as necessary" are not clean to a reader.  You will want that documentation regardless, so you might as well write it now.
         // discovers all functions that will be instrumented, and updates
         // the function signatures to tag all passed values as necessary.
-        // also updates type definitions in structs. 
+        // also updates type definitions in structs.
         let mut modify_params_visitor = UpdateFnDeclsVisitor::new();
         modify_params_visitor.visit_crate(krate);
         let modified_funcs = modify_params_visitor.get_modified_funcs();
@@ -66,15 +70,12 @@ impl rustc_driver::Callbacks for Callbacks {
         // define all used ATI types from ati.rs
         // do this last so that instrumentation is not applied to these types
         let cwd = std::env::current_dir().unwrap();
-        define_types_from_file(
-            &cwd.join("src/ati/ati.rs"),
-            &compiler.sess.psess,
-            krate,
-        );
+        define_types_from_file(&cwd.join("src/ati/ati.rs"), &compiler.sess.psess, krate);
 
         Compilation::Continue
     }
 
+    // MDE: Where are these defined?
     // leaving the other callbacks just in case they are useful
     fn after_expansion<'tcx>(
         &mut self,
@@ -93,7 +94,7 @@ impl rustc_driver::Callbacks for Callbacks {
     }
 }
 
-/// Entry-point, forwards all arguments command line arguments to rustc_driver
+/// Entry-point, forwards all command-line arguments to rustc_driver
 pub fn main() {
     let args: Vec<_> = env::args().collect();
     let mut cbs = Callbacks {};

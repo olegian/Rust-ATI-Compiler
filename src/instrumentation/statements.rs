@@ -1,6 +1,5 @@
-/* Defines a visitor which tags all primitives that can be tagged,
- * based on the common::can_literal_be_tupled function. Further,
- * finds uses of these values that require them to be "untupled" 
+/* Defines a visitor which tags primitives. Further,
+ * finds uses of these values that require them to be "untupled"
  * within tracked functions (like when passed to an untracked function),
  * unbinding the tag from the value in that case (TaggedValue<T> -> T).
 */
@@ -8,16 +7,20 @@ use std::collections::HashMap;
 
 use rustc_ast as ast;
 use rustc_ast::mut_visit::{self, MutVisitor};
-use rustc_span::{DUMMY_SP, Ident};
+use rustc_span::{Ident, DUMMY_SP};
 
 use crate::instrumentation::common::{self, FnInfo};
 
+// MDE: If this doesn't use the Visitor design pattern, don't call it "Visitor".
 pub struct TupleLiteralsVisitor<'modfuncs> {
+    // MDE: Add documentation for `modified_funcs`.  Should I think of it as an input to TupleLiteralsVisitor or as an output of TupleLiteralsVisitor?
     modified_funcs: &'modfuncs HashMap<String, FnInfo>,
 }
 
 impl<'modfuncs> MutVisitor for TupleLiteralsVisitor<'modfuncs> {
+    // MDE: This comment belongs below in the `Lit` clause of the `match` statement.  The function does more than just that.
     /// Converts all literals into TaggedValue<T>'s
+    /// MDE: Define "correctly passed".
     /// while making sure those values are correctly passed
     /// between the tracked/untracked boundary.
     fn visit_expr(&mut self, expr: &mut ast::Expr) {
@@ -36,17 +39,18 @@ impl<'modfuncs> MutVisitor for TupleLiteralsVisitor<'modfuncs> {
             // back into a TaggedValue
             ast::ExprKind::Call(ref func, ref mut args) => {
                 if let ast::ExprKind::Path(None, path) = &func.kind {
+                    // MDE: Your code is inconsistent in the use of "TODO" vs "FIXME".  Rust has specific conventions for when each one should be used.
                     // TODO: not sure if this works with complex function invocations
                     // that involve use statements and renames. might have to construct
                     // down paths from crate::. Temporary workaround below,
                     // probably need to change it later.
 
-                    // TODO: Another problem, we have no way of knowing what type of 
+                    // TODO: Another problem, we have no way of knowing what type of
                     // value an untracked function will return. If it returns a basic type,
                     // then it can be tupled as normal, but what if it returns a complex
                     // type? a struct? a vec?
                     // Further, what if a vec is supposed to store a tracked value?
-                    // the Vec.push operation is an "untracked" function, but we DO 
+                    // the Vec.push operation is an "untracked" function, but we DO
                     // want to pass in a TaggedValue to it?
                     if let Some(last_segment) = path.segments.last() {
                         if !self
@@ -74,8 +78,7 @@ impl<'modfuncs> MutVisitor for TupleLiteralsVisitor<'modfuncs> {
             ast::ExprKind::MacCall(box ast::MacCall {
                 ref mut path,
                 ref mut args,
-            }) => {
-            }
+            }) => {}
 
             // TODO: handle method calls?
             _ => {}
@@ -88,6 +91,7 @@ impl<'modfuncs> TupleLiteralsVisitor<'modfuncs> {
         Self { modified_funcs }
     }
 
+    // MDE: What expression is the result?  What tag is used?
     /// Takes an expression of type T and converts it to an expression of TaggedValue<T>,
     /// by using the ATI::track function from ati.rs
     fn tupleify_expr(&self, expr: &ast::Expr) -> ast::Expr {
@@ -128,12 +132,10 @@ impl<'modfuncs> TupleLiteralsVisitor<'modfuncs> {
         }
     }
 
+    // MDE: This function does not unwrap its argument.  Rather, it outputs an expression that unwraps the input expression.
     /// Takes a TaggedValue<T> expression and unwraps it to just T,
     /// by accessing the TaggedValue's 0'th field.
     fn unbind_tupled_expr(&self, expr: &mut ast::Expr) -> ast::ExprKind {
-        ast::ExprKind::Field(
-            Box::new(expr.clone()),
-            Ident::from_str("0"),
-        )
+        ast::ExprKind::Field(Box::new(expr.clone()), Ident::from_str("0"))
     }
 }

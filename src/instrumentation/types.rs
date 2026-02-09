@@ -1,6 +1,8 @@
-/* Defines a function which reads a file, parses it, and adds every single 
+// MDE: Documentation of the function should be written at the function definition, not far away from it at the top of the file.
+// MDE: Define "effectively import".  Maybe you mean, "The compiler treats the file as if the source code contained: ...".
+/* Defines a function which reads a file, parses it, and adds every single
  * type definition into the crate being instrumented. This is used to effectively
- * import a file at compile time, providing access to the necessary definitions to 
+ * import a file at compile time, providing access to the necessary definitions to
  * perform ATI.
 */
 use rustc_ast as ast;
@@ -11,6 +13,7 @@ use rustc_span::FileName;
 
 // FIXME: should I make this an actual module import?? might lead to slightly cleaner code?
 
+// MDE: What is a "required" struct def?
 /// `file` must be a path to a .rs file containing required struct defs,
 /// enum defs, and thier associated impl blocks, to be added to the target
 /// program. Also handles use statements!
@@ -40,13 +43,14 @@ pub fn define_types_from_file(file: &std::path::Path, psess: &ParseSess, krate: 
             Ok(None) => break, // no more items
             Err(diag) => {
                 diag.emit();
+                // MDE: I realize that rustc uses "item" to mean "AST node", but use of it here is confusing to users.  Also, an AST node is post-parsing, so "item" is misleading.  What cannot be parsed is a top-level construct, such as a function or variable definition.
                 panic!("Failed to parse item from analysis.rs");
             }
         }
     }
 
     // actually add the stuff we've collected to the crate
-    // placing imports above all other items
+    // placing imports before all other items
     let items = imports.into_iter().chain(items.into_iter());
     for (i, item) in items.enumerate() {
         krate.items.insert(i, item);

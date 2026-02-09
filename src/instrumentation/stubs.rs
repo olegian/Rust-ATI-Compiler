@@ -1,4 +1,4 @@
-/* Creates function stubs for each tracked function discovered 
+/* Creates function stubs for each tracked function discovered
  * by the visitor in params.rs. Each stub sets up enter and exit
  * sites before invoking the actual function.
 */
@@ -12,6 +12,9 @@ use rustc_span::FileName;
 
 use crate::instrumentation::common::FnInfo;
 
+// MDE: Previously discovered how?  By what code?
+// MDE: Beyond defining new stub functions, this replaces the original function.
+// MDE: Define the "unstubbed" function.  It is not the original function, but a transformation of it.  This is related to the need for documentation of the algorithm, without which the code is hard to understand and review.
 /// Uses previously discovered modified function information to define new "stub functions"
 /// which dynamically create *::ENTER and *::EXIT sites, and then invoke the "unstubbed"
 /// functions. Note that function stubs retain the original name of the function,

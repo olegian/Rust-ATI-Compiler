@@ -1,17 +1,17 @@
 /* Defines all types used to perform dynamic ATI. Every type in this file
  * is also defined in the instrumented code by `types.rs`.
  *
- * Key points include: 
+ * Key points include:
  * 1. `struct ATI` - A single global instance of this struct exists in the program
  *    accessible everywhere within the instrumented files, which holds the value_uf
- *    UnionFind (tracking all value interaction, globally) alongside the actual 
+ *    UnionFind (tracking all value interaction, globally) alongside the actual
  *    abstract type partition at each site. All interactions with ATI instrumentation
  *    are done by calling methods associated with this struct.
  * 2. `struct TaggedValue<T>` - a tuple of (T, Id), which implements all necessary
  *    operators on T to record interactions within the value_uf, when they happen.
- * 3. `struct Site` - A program point, created in stubs, which stores the abstract 
+ * 3. `struct Site` - A program point, created in stubs, which stores the abstract
  *    types of variables registered to it.
- * 4. `struct Sites` - Maintains a collection of program points, all the sites in the 
+ * 4. `struct Sites` - Maintains a collection of program points, all the sites in the
  *    instrumented file.
  * 5. `struct UnionFind` - A simple union find data structure, with some classic rank
  *    optimization.
@@ -51,13 +51,16 @@ impl Tagger {
     }
 }
 
-/// A tuple of a primative type T, alongside a unique `Id`.
+// MDE: Please put TaggedValue in its own file.  That will make the structure of the code clearer, and will make this file less unweildy.
+
+/// A tuple of a primitive type T and a unique `Id`.
 /// This isn't expected to be created directly, but is instead
 /// used as a return type from `ATI::track`.
 ///
 /// Further, this struct implements `std::ops::{Add, Sub, Mul, Div}`,
 /// alongside Ord, and Eq for less than and comparison,
 /// as long as `T` implements each operator. Whenever two tagged values
+/// MDE: avoid passive voice "are observed".  Be specific.
 /// are observed interacting through these operators, global `ATI_ANALYSIS`
 /// is updated to record the interaction.
 #[derive(Debug, Clone, Copy)]
@@ -72,6 +75,7 @@ where
         Self(value, id)
     }
 
+    // MDE: A name like "get_value" would be clearer than "unbind".
     /// Copies the value out of the struct
     pub fn unbind(&self) -> T {
         self.0
@@ -88,6 +92,7 @@ where
     }
 }
 
+// MDE: This reads like it is what the function does.  Reword.
 /// View TaggedValue docstring.
 impl<T> Add<TaggedValue<T>> for TaggedValue<T>
 where
@@ -191,8 +196,9 @@ where
     }
 }
 
+// MDE: This maps to an Id, but the documention says "to their values".  Clarify or correct.
 /// Represents a Site under analysis, ultimately a mapping of in-scope
-/// variables to thier values at the start and end of each function.
+/// variables to their values at the start and end of each function.
 #[derive(Debug)]
 pub struct Site {
     type_uf: UnionFind,
@@ -212,11 +218,13 @@ impl Site {
         }
     }
 
+    // MDE: Binding is a compile-time notion; it indicates the meaning of a symbol in the program text.  Here, it is being used for a different concept, which I found confusing.  Also, we say we bind a variable to a value, not a value to a variable.
     /// Records that a particular `tv: TaggedValue<T>` was bound to a variable
     /// named `var_name`.
     ///
     /// Intended for use whenever a let binding occurs. Essentially, abusing
     /// some notation, 1 gets converted to 2. Can also be used to record parameters
+    /// MDE: What is the definition of "properly formatted"?
     /// or return values, as long as it's properly formatted.
     /// ```
     /// 1. let x = 10;
@@ -230,10 +238,11 @@ impl Site {
         tv
     }
 
+    // MDE: Should "observed_vars" be "observed_var_tags"?
     /// Algorithm from paper, updates ATI information based on observed_vars
     pub fn update(&mut self, value_uf: &mut UnionFind) {
         for (new_var, new_var_tag) in &self.observed_var_tags {
-            let new_leader_tag = value_uf.find(new_var_tag).unwrap(); // ? is this unwrap safe? 
+            let new_leader_tag = value_uf.find(new_var_tag).unwrap(); // ? is this unwrap safe?
             let new_leader_tag = self.type_uf.introduce_tag(new_leader_tag);
 
             if let Some(old_tag) = self.var_tags.get(new_var) {
@@ -264,6 +273,7 @@ impl Site {
 
 /// Manages multiple Sites at once, to allow for analyzing multiple functions
 pub struct Sites {
+    // MDE: Document the meaning or format of the string -- at least, how this program uses it.
     locs: BTreeMap<String, Site>,
 }
 impl Sites {
@@ -272,6 +282,8 @@ impl Sites {
             locs: BTreeMap::new(),
         }
     }
+
+    // MDE: The use of exotic function names "extract" and "stash" makes client code unnecessarily hard to comprehend.  These are wrappers around "remove" and "insert" and should use those exact names.
 
     /// Pulls a site out of the map, for local modification.
     /// If no site with `id` exists, creates a new one.
@@ -283,6 +295,7 @@ impl Sites {
         }
     }
 
+    // MDE: This seems to put a copy, not the site itself.
     /// Puts a site that was locally modified back into the map.
     pub fn stash(&mut self, site: Site) {
         self.locs.insert(site.name.clone(), site);
@@ -296,6 +309,8 @@ impl Sites {
         }
     }
 }
+
+// MDE: Put the union-find data structure in its own file.
 
 /// Basic UnionFind implementation, with some light rank optimization.
 #[derive(Debug)]
@@ -432,7 +447,7 @@ impl ATI {
         self.sites.stash(site);
     }
 
-    /// Observe two tagged values interacting together, merging them in 
+    /// Observe two tagged values interacting together, merging them in
     /// value_uf.
     pub fn union_tags<T>(&mut self, tv1: &TaggedValue<T>, tv2: &TaggedValue<T>)
     where
