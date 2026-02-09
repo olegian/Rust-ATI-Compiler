@@ -1,14 +1,19 @@
+// MDE: Are the functions used at compile time (that is, when this project runs), at run time (that is, when the executable runs), or both?
 /* Provides helper functions that are used throughout this entire project.
- * Namely, this includes determining the set of types that are considered
+ * This includes determining the set of types that are considered
  * able to be tagged, and carrying tracked function information from the
  * point where they are discovered by the visitor in params.rs, to the point
  * where stubs are created, in stubs.rs.
-*/
+ */
+// MDE: The meaning of "stubs" needs to be documented -- probably in a file that explains the algorithm rather than here.
 use rustc_ast as ast;
-use rustc_ast::{Ty, token::{Lit, LitKind}};
-use rustc_span::{sym};
+use rustc_ast::{
+    token::{Lit, LitKind},
+    Ty,
+};
+use rustc_span::sym;
 
-/// Returns true if the passed in node represents a type which 
+/// Returns true if the passed-in AST node represents a type that
 /// is tupled at the top level (does not recursively search through generics)
 fn is_type_tupled(ty: &Ty) -> bool {
     if let ast::TyKind::Path(_, ast::Path { ref segments, .. }) = ty.kind {
@@ -19,20 +24,20 @@ fn is_type_tupled(ty: &Ty) -> bool {
 }
 
 /// Determines whether or not the passed in literal can be converted
-/// into a TaggedValue. Modify the below list to enable/disable tupling literals.
+/// into a TaggedValue.
 pub fn can_literal_be_tupled(lit: &Lit) -> bool {
     matches!(lit.kind, LitKind::Integer | LitKind::Float)
 }
 
 /// Determines whether or not the passed in type can be converted into
-/// a TaggedValue. Modify the below list to add/remove tupled types.
+/// a TaggedValue.
 pub fn can_type_be_tupled(ty: &Ty) -> bool {
     // this function is very similar to ast::TyKind::maybe_scalar
     // but I'm leaving it here so that we have more control over it
 
     let ty = ty.peel_refs(); // ignore & and &mut, we care about actual type
     let Some(ty_sym) = ty.kind.is_simple_path() else {
-        return false; // unit type then, which idt we need to track at all
+        return false; // unit type then, which I don't think we need to track at all
     };
 
     matches!(
@@ -56,8 +61,9 @@ pub fn can_type_be_tupled(ty: &Ty) -> bool {
     )
 }
 
+// MDE: In what format?
 /// Converts an ast Path Ty into the full type string,
-// FIXME: I'm actually not sure what this will do with unit types. 
+// FIXME: I'm actually not sure what this will do with unit types.
 // FIXME: probably a good idea to make this return a Result in case of poorly formatted type strings
 fn expand_path_string(ty_path: &ast::Path) -> String {
     ty_path
@@ -120,7 +126,7 @@ pub struct FnInfo {
 }
 
 impl FnInfo {
-    /// Creates string representations of the statements from ati.rs required 
+    /// Creates string representations of the statements from ati.rs required
     /// to bind all input parameters to the enter and exit sites.
     fn create_param_binds(&self, site_name: &str) -> String {
         self.params
@@ -142,9 +148,9 @@ impl FnInfo {
             .join("")
     }
 
-    /// Reads in self.params and constructs the string
+    /// Constructs the string
     /// of parameter declarations to use for this function
-    /// 
+    ///
     /// In other words, returns the string described by <...>:
     /// `fn my_foo(< a: u32, b: f64 >);`
     fn create_param_decls(&self) -> String {
@@ -178,10 +184,10 @@ impl FnInfo {
             .join(", ")
     }
 
-    /// Reads in self.params and constructs the string
-    /// of parameters to pass into the *_unstubbed version 
+    /// Constructs the string
+    /// of parameters to pass into the *_unstubbed version
     /// of the function.
-    /// 
+    ///
     /// In other words, returns the string described by <...>
     /// `let res = foo_unstubbed(< a, b >);``
     fn create_passed_params(&self) -> String {
@@ -206,7 +212,7 @@ impl FnInfo {
             .join(", ")
     }
 
-    /// Reads self.return_ty and converts the node
+    /// Converts self.return_ty
     /// into a regular type string. Return None if
     /// the return type is ().
     fn create_return_type(&self) -> Option<String> {

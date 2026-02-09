@@ -1,4 +1,6 @@
 # DATIR: Dynamic Abstract Type Inference in Rust
+MDE: This description mentions inserting instrumentation, which makes it sound like a source-to-source transformation.  In fact, this is a plug-in to the Rust compiler.  It creates an executable with extra behavior.
+
 This repository contains all the code necessary to automatically insert instrumentation into arbitrary Rust source code, to perform abstract type inference (ATI). This project is loosely based on [dynamic inference of abstract types](https://dl.acm.org/doi/10.1145/1146238.1146268).
 
 ## Using This Repository
@@ -13,6 +15,8 @@ rustup toolchain install nightly --allow-downgrade --profile minimal --component
 
 rustup component add rust-src rustc-dev llvm-tools-preview;
 ```
+
+MDE: What is the effect of this command?  I think it compiles a Rust program and produces an executable.
 
 At this point, you should be able to compile and run this project with:
 ```sh
@@ -35,6 +39,8 @@ The following files make up the majority of the implementation:
 7. `tests/*`: Unit tests, which invoke the compiler on input files and checks the ATI output against an expected partition.
 
 ## Output
+MDE: "The exact form" makes it sound like there are multiple options.  But there is only one.
+
 The exact form of output is governed by `src/ati/ati.rs::ATI::report()`. This function is invoked right before `main` exits. Currently, the output is just written to stdout, starting with `===ATI-ANALYSIS-START===`. For example, the following output is produced by instrumenting and executing a simple program which has `main` invoke another function `foo`, which accepts three parameters `x`, `y`, and `z` (`tests/simple/input.rs`). The values of `x` and `y` are used to compute the return value, `RET`.
 
 ```

@@ -1,26 +1,26 @@
-/* Defines the visitor which edits all type signatures and definitions to 
- * wrap primitive types T into TaggedValue<T> (defined in ati.rs). 
- * After this pass, all declared types should be in a form which allows
- * unique tags to be carried alongside values.
+/* Defines the visitor which edits all type signatures and definitions to
+ * wrap primitive types T into TaggedValue<T> (defined in ati.rs).
 */
 use std::collections::HashMap;
 
 use rustc_ast as ast;
 use rustc_ast::mut_visit::MutVisitor;
-use rustc_span::{DUMMY_SP, Ident};
+use rustc_span::{Ident, DUMMY_SP};
 
 use crate::instrumentation::common::{self, FnInfo};
 
+// MDE: Maybe "PrimitiveTagger"?
 // FIXME: this deserves a better name.
 // it does more than functions after all
+// MDE: The name "Visitor" is misleading because this does not use the visitor pattern.  (It uses recursive descent.)
 pub struct UpdateFnDeclsVisitor {
     modified_functions: HashMap<String, FnInfo>,
 }
 
 impl MutVisitor for UpdateFnDeclsVisitor {
     /// Converts all function signatures and top level type definitions (structs)
-    /// to thier tagged variants. Specifically modifies all parameter types to
-    /// be TaggedValues if necessary, alongside returns.
+    /// to thier tagged variants. Specifically modifies all parameter and return types to
+    /// be TaggedValues if necessary.
     fn visit_item(&mut self, item: &mut ast::Item) {
         match item.kind {
             ast::ItemKind::Fn(box ast::Fn {
@@ -55,6 +55,7 @@ impl MutVisitor for UpdateFnDeclsVisitor {
                 *ident = Ident::from_str(&format!("{old_ident}_unstubbed"));
             }
 
+            // MDE: Values do not exist at compile time.  Reword.
             // Tags all values in struct that can be tupled
             ast::ItemKind::Struct(_, _, ast::VariantData::Struct { ref mut fields, .. }) => {
                 for field_def in fields {
@@ -76,7 +77,8 @@ impl UpdateFnDeclsVisitor {
         }
     }
 
-    /// Extract the information regarding functions that this visitor has 
+    // MDE: What is "the information"?  Why does this say "Extract" rather than just "Returns"?
+    /// Extract the information regarding functions that this visitor has
     /// discovered and considered tracked
     pub fn get_modified_funcs(&self) -> &HashMap<String, FnInfo> {
         &self.modified_functions
@@ -105,8 +107,8 @@ impl UpdateFnDeclsVisitor {
         );
     }
 
-    /// Searches through type `ty` to find and tuple all primitive types 
-    /// that should be tupled. Modifies the type in place.
+    /// Tuples all primitive types in `ty`.
+    /// Modifies the type in place.
     fn recursively_tuple_type<'a>(&self, ty: &'a mut ast::Ty) {
         if common::can_type_be_tupled(ty) {
             self.tuple_type(ty);
@@ -115,10 +117,11 @@ impl UpdateFnDeclsVisitor {
 
         if let ast::TyKind::Path(_, path) = &mut ty.kind {
             for segment in path.segments.iter_mut() {
-                if let Some(box ast::GenericArgs::AngleBracketed(ast::AngleBracketedArgs{
+                if let Some(box ast::GenericArgs::AngleBracketed(ast::AngleBracketedArgs {
                     args,
                     ..
-                })) = &mut segment.args {
+                })) = &mut segment.args
+                {
                     for arg in args.iter_mut() {
                         if let ast::AngleBracketedArg::Arg(ast::GenericArg::Type(ty)) = arg {
                             self.recursively_tuple_type(ty);
