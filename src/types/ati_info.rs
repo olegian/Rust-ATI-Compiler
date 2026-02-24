@@ -222,7 +222,6 @@ impl FunctionSignatures {
                     }
                 } else {
                     // This is where things like Vec will show up
-
                 }
             }
 

@@ -88,12 +88,17 @@ pub fn verify(mut ati_stdout: &str, expected_partition: &HashMap<String, HashMap
 
         let expected_site = expected_site.unwrap();
         assert!(expected_site.len() == site_ati_output.len());
-        
+
         let mut expected_to_actual: HashMap<&usize, &usize> = HashMap::new();
         for (var, actual_id) in site_ati_output.iter() {
-            let expected_id = expected_site.get(var).expect(&format!("Expected site does not have var: {var}"));
+            let expected_id = expected_site
+                .get(var)
+                .expect(&format!("Expected site does not have var: {var}"));
             if let Some(prev_actual_id) = expected_to_actual.get(expected_id) {
-                assert_eq!(**prev_actual_id, *actual_id, "Var {var} was found in a wrong set");
+                assert_eq!(
+                    **prev_actual_id, *actual_id,
+                    "Var {var} was found in a wrong set"
+                );
             } else {
                 expected_to_actual.insert(expected_id, actual_id);
             }
@@ -101,7 +106,6 @@ pub fn verify(mut ati_stdout: &str, expected_partition: &HashMap<String, HashMap
 
         ati_stdout = &ati_stdout[(end + SITE_DELIM.len())..];
     }
-
 
     // found_sites contains no duplicates, so as long as we were able
     assert!(found_sites.len() == expected_partition.len());

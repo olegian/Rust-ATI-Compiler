@@ -14,7 +14,7 @@ fn uses_struct() {
             .register("z", 2)
             .register("s.x", 3)
             .register("s.y", 4)
-            .register("s.z.x", 5)
+            .register("s.z.x", 5),
     );
     expected.register_site(
         ExpectedSite::new("func::EXIT")

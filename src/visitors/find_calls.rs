@@ -83,7 +83,6 @@ impl<'tcx, 'a> Visitor<'tcx> for FindUntrackedCallsVisitor<'tcx, 'a> {
             //         Res::Err => todo!(),
             //     }
             // }
-
             _ => {}
         }
 

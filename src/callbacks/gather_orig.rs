@@ -13,18 +13,20 @@ use crate::{types::ati_info::FunctionBoundaries, visitors::FindUntrackedCallsVis
 /// Contains the callbacks used for the first information-gathering compilation.
 pub struct GatherAtiInfo {
     /// contains the information discovered after executing the compilation.
-    fbs: Option<FunctionBoundaries>,
+    fbs: FunctionBoundaries,
 }
 
 impl GatherAtiInfo {
     pub fn new() -> Self {
-        Self { fbs: None }
+        Self {
+            fbs: FunctionBoundaries::new(),
+        }
     }
 
     /// Pulls out all gathered info that this compiler invocation learned.
     /// Panics if this function is called before the pass is performed.
-    pub fn pull_function_boundaries(&mut self) -> FunctionBoundaries {
-        self.fbs.take().unwrap()
+    pub fn pull_function_boundaries(self) -> FunctionBoundaries {
+        self.fbs
     }
 }
 
@@ -50,8 +52,6 @@ impl<'a> rustc_driver::Callbacks for GatherAtiInfo {
         _compiler: &interface::Compiler,
         tcx: TyCtxt<'tcx>,
     ) -> Compilation {
-        let mut fbs = FunctionBoundaries::new();
-
         // find all user-defined functions
         // TODO: i'm not sure what this is going to do with closures
         for local_def_id in tcx.hir_body_owners() {
@@ -61,7 +61,8 @@ impl<'a> rustc_driver::Callbacks for GatherAtiInfo {
                 ..
             }) = node
             {
-                fbs.observe_tracked_fn(&ident, local_def_id.to_def_id());
+                self.fbs
+                    .observe_tracked_fn(&ident, local_def_id.to_def_id());
             } else if let rustc_hir::Node::AnonConst(anon_const) = node {
                 // chill to just ignore?
             } else {
@@ -72,10 +73,12 @@ impl<'a> rustc_driver::Callbacks for GatherAtiInfo {
         }
 
         // find all places where a non-user-defined function was called
-        let mut find_calls_visitor = FindUntrackedCallsVisitor { tcx, fbs: &mut fbs };
+        let mut find_calls_visitor = FindUntrackedCallsVisitor {
+            tcx,
+            fbs: &mut self.fbs,
+        };
         tcx.hir_walk_toplevel_module(&mut find_calls_visitor);
 
-        self.fbs = Some(fbs);
         Compilation::Continue
     }
 

@@ -13,7 +13,11 @@ struct MyStruct {
 
 #[ignore]
 fn main() {
-    let s = MyStruct { x: 1, y: 2, z: Inner { x: 3.0, y: true } };
+    let s = MyStruct {
+        x: 1,
+        y: 2,
+        z: Inner { x: 3.0, y: true },
+    };
     func(s, 10, 20, 30);
 }
 

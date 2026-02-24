@@ -32,9 +32,9 @@ impl rustc_driver::Callbacks for InstrumentAti {
         // use our custom loader to also instrument non-root files
         // this loader will be the one responsible for adding all stubs,
         // tupling all literals, etc.
-        config.file_loader = Some(Box::new(TransformingFileLoader::new(
-            self.fbs.take().unwrap(),
-        )));
+        // config.file_loader = Some(Box::new(TransformingFileLoader::new(
+        //     self.fbs.take().unwrap(),
+        // )));
     }
 
     /// Define necessary types in the root file. All other files will

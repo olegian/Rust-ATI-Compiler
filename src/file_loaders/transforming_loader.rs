@@ -5,7 +5,6 @@
  * mutate *any* file, and not just the root.
 */
 use rustc_ast as ast;
-use rustc_ast::mut_visit::MutVisitor;
 use rustc_ast_pretty::pprust;
 use rustc_session::parse::ParseSess;
 use rustc_span::source_map::{FileLoader, RealFileLoader};
@@ -13,8 +12,6 @@ use std::io;
 use std::path::Path;
 
 use crate::common;
-use crate::types::ati_info::FunctionBoundaries;
-use crate::visitors::{TupleLiteralsVisitor, UpdateFnDeclsVisitor, import_root_crate};
 
 /// This FileLoader constructs an early intermediate AST of any file that is loaded
 /// through it. This intermediate AST can be modified using the regular Visitor
@@ -27,15 +24,14 @@ use crate::visitors::{TupleLiteralsVisitor, UpdateFnDeclsVisitor, import_root_cr
 pub struct TransformingFileLoader {
     /// The regular FileLoader that rustc uses
     inner: RealFileLoader,
-    /// Information regarding tracked/untracked function calls
-    /// that was discovered by some prior queries of the HIR.
-    fbs: FunctionBoundaries,
+    passes: Passes,
+    config: TransformingFileLoaderConfig,
 }
 
 /// Represents the string contents of a file, alongside the type of file
 type FileContents = (String, FileType);
 #[derive(Debug)]
-enum FileType {
+pub enum FileType {
     /// Represents the tracked crate root file.
     Root,
     /// Represents a tracked dep file.
@@ -44,12 +40,46 @@ enum FileType {
     Untracked,
 }
 
+pub struct TransformingFileLoaderConfig {
+    print_output: bool,
+}
+
+impl TransformingFileLoaderConfig {
+    pub fn debug() -> Self {
+        Self { print_output: true }
+    }
+
+    pub fn release() -> Self {
+        Self { print_output: false }
+    }
+}
+
+type Pass = Box<dyn Fn(&mut ast::Crate, &FileType) + Send + Sync + 'static>;
+pub struct Passes(Vec<Pass>);
+impl Passes {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn register(&mut self, pass: Pass) {
+        self.0.push(pass);
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &Pass> {
+        self.0.iter()
+    }
+}
+
 impl TransformingFileLoader {
     /// Constructor
-    pub fn new(fbs: FunctionBoundaries) -> Self {
+    pub fn new(
+        passes: Passes,
+        config: TransformingFileLoaderConfig,
+    ) -> Self {
         Self {
             inner: RealFileLoader,
-            fbs: fbs,
+            passes,
+            config,
         }
     }
 
@@ -58,44 +88,26 @@ impl TransformingFileLoader {
         ParseSess::new(Vec::from([rustc_driver::DEFAULT_LOCALE_RESOURCE]))
     }
 
-    /// Transforms the file at `path` which contains `contents`, by first parsing
-    /// the contents into an AST, performing visitor passes over the AST,
-    /// then converting the transformed AST back into a file contents string.
-    /// This effectively inserts a second AST construction before the actual rustc AST
-    /// is made. Thats unfortunate, but necessary as there is no callback that gets
-    /// invoked for each non-crate-root file that is parsed in.
     fn transform_source(&self, contents: FileContents, path: &Path) -> String {
         let psess = Self::create_parse_sess();
         let (contents, file_type) = contents;
 
         let mut krate = common::parse_crate(&psess, contents, Some(path));
 
-        // tuple all literals to create tags, untupling them as necessary
-        // when they are passed into untracked functions, and further re-tupling returns
-        // from those untracked functions if they return trackable types.
-        let mut tl_vis = TupleLiteralsVisitor::new(&self.fbs);
-        tl_vis.visit_crate(&mut krate);
-
-        // discovers all functions that will be instrumented, and updates
-        // the function signatures to tag all passed-in params, if necessary.
-        // also updates type definitions in structs to have fields be tagged.
-        let mut fn_decls_vis = UpdateFnDeclsVisitor::new(&self.fbs);
-        fn_decls_vis.visit_crate(&mut krate);
-
-        // create all required function stubs, which perform site management
-        let fn_sigs = fn_decls_vis.get_new_fn_signatures();
-        fn_sigs.create_stub_items(&mut krate, &psess);
-        // create_stubs(&mut krate, &psess, &fn_sigs);
-
-        // make the ATI types available to dependancies
-        if matches!(file_type, FileType::Dep) {
-            import_root_crate(&mut krate, &psess);
+        for pass in self.passes.iter() {
+            pass(&mut krate, &file_type);
         }
 
-        self.ast_to_source(&krate)
+        let output = self.ast_to_source(&krate);
+
+        if self.config.print_output {
+            println!("===========  Modified File: {path:?} =============\n{output}")
+        }
+
+        output
     }
 
-    /// Converts an Crate AST to a standard string representation, equivalent
+    /// Converts a Crate AST to a standard string representation, equivalent
     /// to that of a regular source file. After this call, the regular rustc
     /// parser will be ready to run again consuming the output string.
     fn ast_to_source(&self, krate: &ast::Crate) -> String {
@@ -114,8 +126,6 @@ impl TransformingFileLoader {
             output.push_str(&item_str);
             output.push_str("\n\n"); // two \n just to match normal file loader
         }
-
-        println!("INSTRUMENTED:\n{output}");
 
         output
     }
