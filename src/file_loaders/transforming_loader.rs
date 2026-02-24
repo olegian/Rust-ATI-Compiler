@@ -54,7 +54,7 @@ impl TransformingFileLoaderConfig {
     }
 }
 
-type Pass = Box<dyn Fn(&mut ast::Crate, &FileType) + Send + Sync + 'static>;
+type Pass = Box<dyn Fn(&ParseSess, &mut ast::Crate, &FileType) + Send + Sync>;
 pub struct Passes(Vec<Pass>);
 impl Passes {
     pub fn new() -> Self {
@@ -95,7 +95,7 @@ impl TransformingFileLoader {
         let mut krate = common::parse_crate(&psess, contents, Some(path));
 
         for pass in self.passes.iter() {
-            pass(&mut krate, &file_type);
+            pass(&psess, &mut krate, &file_type);
         }
 
         let output = self.ast_to_source(&krate);

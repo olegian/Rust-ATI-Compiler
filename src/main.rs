@@ -34,9 +34,11 @@ pub fn main() {
     // rustc_driver::run_compiler(&args, &mut gather_info); // panics on compilation failure
     // let fbs = gather_info.pull_function_boundaries();
 
-    // let mut instr = callbacks::create_instrumentation::InstrumentAti::new(fbs);
-    // rustc_driver::run_compiler(&args, &mut instr);
-
     let mut cbs = callbacks::explicit::Explicit::new();
-    rustc_driver::run_compiler(&args, &mut cbs)
+    rustc_driver::run_compiler(&args, &mut cbs);
+    let fbs = cbs.into_fbs();
+
+    let mut instr = callbacks::create_instrumentation::InstrumentAti::new(fbs);
+    rustc_driver::run_compiler(&args, &mut instr);
+
 }
