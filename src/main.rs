@@ -5,6 +5,7 @@
 */
 #![feature(rustc_private)]
 #![feature(box_patterns)]
+#![feature(min_specialization)]
 
 extern crate rustc_ast;
 extern crate rustc_ast_pretty;
@@ -33,6 +34,8 @@ pub fn main() {
     let mut gather_info = callbacks::gather_orig::GatherAtiInfo::new();
     rustc_driver::run_compiler(&args, &mut gather_info); // panics on compilation failure
     let fbs = gather_info.pull_function_boundaries();
+
+    // println!("GATHERED: {:?}", fbs);
 
     let mut cbs = callbacks::transform_ast::TransformAbstractSyntaxTreeCallbacks::new(fbs);
     rustc_driver::run_compiler(&args, &mut cbs);

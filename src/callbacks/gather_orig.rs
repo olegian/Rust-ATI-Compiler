@@ -19,7 +19,7 @@ pub struct GatherAtiInfo {
 impl GatherAtiInfo {
     pub fn new() -> Self {
         Self {
-            fbs: FunctionBoundaries::new(),
+            fbs: FunctionBoundaries::default(),
         }
     }
 
@@ -65,6 +65,7 @@ impl<'a> rustc_driver::Callbacks for GatherAtiInfo {
                     .observe_tracked_fn(&ident, local_def_id.to_def_id());
             } else if let rustc_hir::Node::AnonConst(anon_const) = node {
                 // chill to just ignore?
+                // this is for static constants i think...
             } else {
                 panic!(
                     "Found body owner that isn't a function while discovering ATI info: {node:#?}"

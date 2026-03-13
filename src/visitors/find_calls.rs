@@ -57,32 +57,23 @@ impl<'tcx, 'a> Visitor<'tcx> for FindUntrackedCallsVisitor<'tcx, 'a> {
                 }
             }
 
-            // hir::ExprKind::Path(hir::QPath::Resolved(_, hir::Path {
-            //     span,
-            //     res,
-            //     segments,
-            // })) => {
-            //     match res {
-            //         Res::Local(hir_id) => {
-            //             let ldid = hir_id.owner.def_id;
-            //             let typeck = self.tcx.typeck(ldid);
-            //             // typeck.
+            hir::ExprKind::AddrOf(borrow_kind, mutability, inner_expr) => {
+                // let res =  self.tcx.type_of(inner_expr.hir_id.owner.def_id);
+                // let res = typeck.expr_ty(expr);
+                let ldid = inner_expr.hir_id.owner.def_id;
+                let typeck = self.tcx.typeck(ldid);
 
-            //             // if let Res::Def(_kind, def_id) = typeck.res
-            //             // self.tcx.typeck(hir_id);
-            //             let def_id = self.tcx.typeck_root_def_id(ldid.to_def_id());
-            //         },
+                // NB (2): This type doesn’t provide type parameter args; e.g., if you ask for the type of id in id(3), it will return fn(&isize) -> isize instead of fn(ty) -> T with T = isize.
+                let current_ty = typeck.expr_ty(expr);
+                let coerced_ty = typeck.expr_ty_adjusted(expr);
 
-            //         Res::Def(def_kind, def_id) => todo!(),
-            //         Res::PrimTy(prim_ty) => todo!(),
-            //         Res::SelfTyParam { trait_ } => todo!(),
-            //         Res::SelfTyAlias { alias_to, is_trait_impl } => todo!(),
-            //         Res::SelfCtor(def_id) => todo!(),
-            //         Res::ToolMod => todo!(),
-            //         Res::NonMacroAttr(non_macro_attr_kind) => todo!(),
-            //         Res::Err => todo!(),
-            //     }
-            // }
+                // TODO: not sure if this is the correct condition,
+                // we might just apply this transformation to all unsized types
+                // using res.is_sized;
+                if current_ty != coerced_ty {
+                    self.fbs.observe_slice_coercion(expr.span);
+                }
+            }
             _ => {}
         }
 

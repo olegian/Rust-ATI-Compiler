@@ -34,6 +34,12 @@ impl<'a> MutVisitor for TupleLiteralsVisitor<'a> {
                 }
             }
 
+            ast::ExprKind::AddrOf(borrow_kind, mutbl, inner_expr) => {
+                if self.fbs.is_span_ref_type_coercion(&expr.span) {
+                    *expr = self.array_to_slice(expr);
+                }
+            }
+
             ast::ExprKind::Array(_) | ast::ExprKind::Repeat(_, _) => {
                 *expr = self.tuplify_array(expr);
             }
@@ -94,6 +100,44 @@ impl<'a> MutVisitor for TupleLiteralsVisitor<'a> {
 impl<'a> TupleLiteralsVisitor<'a> {
     pub fn new(fbs: &'a FunctionBoundaries) -> Self {
         Self { fbs }
+    }
+
+    fn array_to_slice(&self, expr: &mut ast::Expr) -> ast::Expr {
+        let ast::ExprKind::AddrOf(borrow_kind, mutbl, inner_expr) = expr.kind.clone() else {
+            unimplemented!("Only reference-based fat pointers are supported for array -> slice coercion");
+        };
+        
+        let mut receiver_expr = ast::Expr::dummy();
+        receiver_expr.kind = ast::ExprKind::Path(
+            None,
+            ast::Path {
+                span: DUMMY_SP,
+                segments: [
+                    ast::PathSegment {
+                        ident: Ident::from_str("ATI"),
+                        id: DUMMY_NODE_ID,
+                        args: None,
+                    },
+                    ast::PathSegment {
+                        ident: Ident::from_str("track_slice"),
+                        id: DUMMY_NODE_ID,
+                        args: None,
+                    },
+                ]
+                .into(),
+                tokens: None,
+            },
+        );
+
+        let mut call_expr = ast::Expr::dummy();
+        call_expr.kind = ast::ExprKind::Call(Box::new(receiver_expr), [Box::new(expr.clone())].into());
+
+        let mut new_expr = ast::Expr::dummy();
+        new_expr.kind = ast::ExprKind::AddrOf(borrow_kind, mutbl, Box::new(call_expr));
+
+
+        new_expr
+
     }
 
     fn tuplify_array(&self, expr: &mut ast::Expr) -> ast::Expr {
@@ -169,6 +213,6 @@ impl<'a> TupleLiteralsVisitor<'a> {
     /// Takes a TaggedValue<T> expression and unwraps it to just T,
     /// by accessing the TaggedValue's 0'th field.
     fn unbind_tupled_expr(&self, expr: &mut ast::Expr) -> ast::ExprKind {
-        ast::ExprKind::Field(Box::new(expr.clone()), Ident::from_str("0"))
+        ast::ExprKind::Field(Box::new(expr.clone()), Ident::from_str("1"))
     }
 }

@@ -16,20 +16,21 @@ use crate::common;
 pub fn define_types_from_file(file: &std::path::Path, psess: &ParseSess, krate: &mut ast::Crate) {
     let code: String = std::fs::read_to_string(file).unwrap();
 
-    let mut items = common::parse_items(psess, code, Some(file));
-
-    // TODO: not sure if this is realy necessary.
-    // insert "use" statements first, before all other declarations.
-    items.sort_by(|a, b| match (&a.kind, &b.kind) {
-        (ast::ItemKind::Use(_), ast::ItemKind::Use(_)) => std::cmp::Ordering::Equal,
-        (_, ast::ItemKind::Use(_)) => std::cmp::Ordering::Less,
-        (ast::ItemKind::Use(_), _) => std::cmp::Ordering::Greater,
-        (_, _) => std::cmp::Ordering::Equal,
-    });
+    let items = common::parse_items(psess, code, Some(file));
 
     // actually add the stuff we've collected to the crate
-    // placing imports above all other items
-    for (i, item) in items.into_iter().enumerate() {
+    // removing any use statements as everything
+    // is now going to be in the same file.
+    for (i, item) in items
+        .into_iter()
+        .filter(|item| !matches!(item.kind, ast::ItemKind::Use(_)))
+        .enumerate()
+    {
         krate.items.insert(i, item);
     }
+}
+
+pub fn add_crate_attribute(attr: &str, psess: &ParseSess, krate: &mut ast::Crate) {
+    let attr = common::parse_single_unstable_compiler_attribute(psess, attr.into(), None);
+    krate.attrs.push(attr);
 }

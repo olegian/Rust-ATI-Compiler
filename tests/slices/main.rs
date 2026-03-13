@@ -1,6 +1,6 @@
 fn main() {
     let array = [1, 2, 3];
-    let v     = array.to_vec();
+    let v = array.to_vec();
 
     // foo(1, 2, slice);
 }

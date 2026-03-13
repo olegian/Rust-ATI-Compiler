@@ -12,7 +12,8 @@ use crate::{
     },
     types::ati_info::FunctionBoundaries,
     visitors::{
-        TupleLiteralsVisitor, UpdateFnDeclsVisitor, define_types_from_file, import_root_crate,
+        TupleLiteralsVisitor, UpdateFnDeclsVisitor, add_crate_attribute, define_types_from_file,
+        import_root_crate,
     },
 };
 
@@ -71,6 +72,8 @@ impl<'a> rustc_driver::Callbacks for TransformAbstractSyntaxTreeCallbacks {
     ) -> Compilation {
         let cwd = std::env::current_dir().unwrap();
         define_types_from_file(&cwd.join("src/ati/ati.rs"), &compiler.sess.psess, krate);
+        define_types_from_file(&cwd.join("src/ati/tagged.rs"), &compiler.sess.psess, krate);
+        add_crate_attribute("#![feature(min_specialization)]", &compiler.sess.psess, krate);
 
         Compilation::Continue
     }

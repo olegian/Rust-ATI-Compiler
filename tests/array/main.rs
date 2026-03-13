@@ -1,5 +1,3 @@
-#![feature(ptr_metadata)]
-
 fn main() {
     let repeat = [1; 3];
     foo(repeat, 2, 3, 4);

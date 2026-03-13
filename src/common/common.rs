@@ -150,7 +150,6 @@ pub fn is_type_tupled_slice(ty: &ast::Ty) -> bool {
     }
 }
 
-
 /// Takes an ast lifetime and turns it into a regular "'name" string.
 fn get_lifetime_string(lifetime: &ast::Lifetime) -> String {
     lifetime.ident.to_string()
@@ -355,6 +354,21 @@ pub fn parse_items(
     }
 
     res
+}
+
+pub fn parse_single_unstable_compiler_attribute(
+    psess: &ParseSess,
+    contents: String,
+    file_path: Option<&Path>,
+) -> ast::Attribute {
+    let mut parser = create_parser(psess, contents, file_path);
+
+    parser
+        .parse_inner_attributes()
+        .expect(&format!("Unable to parse Attribute"))
+        .into_iter()
+        .next()
+        .expect("Attribute list has zero elements")
 }
 
 pub fn parse_crate(psess: &ParseSess, contents: String, file_path: Option<&Path>) -> ast::Crate {

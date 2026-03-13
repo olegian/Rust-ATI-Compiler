@@ -17,423 +17,12 @@
  *    optimization.
 */
 
-pub type Id = u64;
+use crate::ati::tagged::{Id, Tagged, Tagger};
 
 /// Top-level global that owns all information about all value interactions
 /// and ATI site states.
 pub static ATI_ANALYSIS: std::sync::LazyLock<std::sync::Arc<std::sync::Mutex<ATI>>> =
     std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::Mutex::new(ATI::new())));
-
-/// Generates incrementing tags of type `Id`, with each call to `tag()`
-#[derive(Debug)]
-pub struct Tagger {
-    next_id: Id,
-}
-
-impl Tagger {
-    /// Creates a new Tagger
-    pub fn new() -> Self {
-        Tagger { next_id: 0 }
-    }
-
-    /// Fetches the next tag
-    pub fn tag(&mut self) -> Id {
-        let id = self.next_id;
-        self.next_id += 1;
-
-        id
-    }
-}
-
-/// A tuple of a primative type T, alongside a unique `Id`.
-/// This isn't expected to be created directly, but is instead
-/// used as a return type from `ATI::track`.
-///
-/// Further, this struct implements `std::ops::{Add, Sub, Mul, Div}`,
-/// alongside Ord, and Eq for less than and comparison,
-/// as long as `T` implements each operator. Whenever two tagged values
-/// are observed interacting through these operators, global `ATI_ANALYSIS`
-/// is updated to record the interaction.
-#[derive(Debug, Clone, Copy)]
-pub struct TaggedValue<T: Copy>(pub Id, pub T);
-pub struct TaggedArray<T, const N: usize>(pub Id, pub [T; N]);
-pub struct TaggedSlice<T>(pub Id, [T]);
-
-impl<T, const N: usize> std::ops::Index<TaggedValue<usize>> for TaggedArray<T, N> {
-    type Output = T;
-
-    fn index(&self, index: TaggedValue<usize>) -> &Self::Output {
-        &self.1[index.1]
-    }
-}
-
-impl<T, const N: usize> std::ops::IndexMut<TaggedValue<usize>> for TaggedArray<T, N> {
-    fn index_mut(&mut self, index: TaggedValue<usize>) -> &mut Self::Output {
-        &mut self.1[index.1]
-    }
-}
-
-impl<T, const N: usize> TaggedArray<T, N> {
-    fn len(&self) -> TaggedValue<usize> {
-        TaggedValue(self.0, N)
-    }
-}
-impl<T> std::ops::Index<TaggedValue<usize>> for TaggedSlice<T> {
-    type Output = T;
-
-    fn index(&self, index: TaggedValue<usize>) -> &Self::Output {
-        &self.1[index.1]
-    }
-}
-
-impl<T> std::ops::IndexMut<TaggedValue<usize>> for TaggedSlice<T> {
-    fn index_mut(&mut self, index: TaggedValue<usize>) -> &mut Self::Output {
-        &mut self.1[index.1]
-    }
-}
-
-impl<T> TaggedSlice<T> {
-    fn len(&self) -> TaggedValue<usize> {
-        TaggedValue(self.0, self.1.len())
-    }
-}
-
-impl<'a, T, const N: usize> std::ops::Deref for TaggedArray<T, N> {
-    type Target = TaggedSlice<T>;
-
-    fn deref(&self) -> &Self::Target {
-        todo!()
-    }
-}
-
-// for debugging purposes
-impl<T> std::fmt::Display for TaggedValue<T>
-where
-    T: Copy + std::fmt::Display,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "({}, {})", self.0, self.1)
-    }
-}
-
-/// View TaggedValue docstring.
-impl<T> std::ops::Add<TaggedValue<T>> for TaggedValue<T>
-where
-    T: std::ops::Add<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn add(self, rhs: TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 + rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Add<&TaggedValue<T>> for TaggedValue<T>
-where
-    T: std::ops::Add<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn add(self, rhs: &TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 + rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Add<TaggedValue<T>> for &TaggedValue<T>
-where
-    T: std::ops::Add<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn add(self, rhs: TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 + rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Add<&TaggedValue<T>> for &TaggedValue<T>
-where
-    T: std::ops::Add<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn add(self, rhs: &TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 + rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Sub<TaggedValue<T>> for TaggedValue<T>
-where
-    T: std::ops::Sub<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        let res = ATI::track(self.1 - rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Sub<&TaggedValue<T>> for TaggedValue<T>
-where
-    T: std::ops::Sub<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn sub(self, rhs: &Self) -> Self::Output {
-        let res = ATI::track(self.1 - rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Sub<TaggedValue<T>> for &TaggedValue<T>
-where
-    T: std::ops::Sub<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn sub(self, rhs: TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 - rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Sub<&TaggedValue<T>> for &TaggedValue<T>
-where
-    T: std::ops::Sub<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn sub(self, rhs: &TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 - rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Mul<TaggedValue<T>> for TaggedValue<T>
-where
-    T: std::ops::Mul<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        let res = ATI::track(self.1 * rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Mul<&TaggedValue<T>> for TaggedValue<T>
-where
-    T: std::ops::Mul<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn mul(self, rhs: &TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 * rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Mul<TaggedValue<T>> for &TaggedValue<T>
-where
-    T: std::ops::Mul<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn mul(self, rhs: TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 * rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Mul<&TaggedValue<T>> for &TaggedValue<T>
-where
-    T: std::ops::Mul<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn mul(self, rhs: &TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 * rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Div<TaggedValue<T>> for TaggedValue<T>
-where
-    T: std::ops::Div<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        let res = ATI::track(self.1 / rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Div<&TaggedValue<T>> for TaggedValue<T>
-where
-    T: std::ops::Div<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn div(self, rhs: &TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 / rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Div<TaggedValue<T>> for &TaggedValue<T>
-where
-    T: std::ops::Div<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn div(self, rhs: TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 / rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> std::ops::Div<&TaggedValue<T>> for &TaggedValue<T>
-where
-    T: std::ops::Div<Output = T> + Copy,
-{
-    type Output = TaggedValue<T>;
-
-    fn div(self, rhs: &TaggedValue<T>) -> Self::Output {
-        let res = ATI::track(self.1 / rhs.1);
-
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        ati.union_tags(&self, &rhs);
-        ati.union_tags(&res, &self);
-
-        res
-    }
-}
-
-impl<T> PartialEq for TaggedValue<T>
-where
-    T: Copy + PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        ATI_ANALYSIS.lock().unwrap().union_tags(&self, &other);
-        self.1 == other.1
-    }
-}
-impl<T> Eq for TaggedValue<T> where T: Copy + PartialEq {}
-
-impl<T> PartialOrd for TaggedValue<T>
-where
-    T: Copy + PartialEq + PartialOrd,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        ATI_ANALYSIS.lock().unwrap().union_tags(&self, other);
-        match self.1.partial_cmp(&other.1) {
-            Some(core::cmp::Ordering::Equal) => Some(core::cmp::Ordering::Equal),
-            ord => return ord,
-        }
-    }
-}
-
-impl<T> Ord for TaggedValue<T>
-where
-    T: Copy + Ord,
-{
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        ATI_ANALYSIS.lock().unwrap().union_tags(&self, other);
-        self.1.cmp(&other.1)
-    }
-}
-
-impl<T> std::hash::Hash for TaggedValue<T>
-where
-    T: Copy + std::hash::Hash,
-{
-    fn hash<H>(&self, hasher: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        self.1.hash(hasher)
-    }
-}
 
 /// Represents a Site under analysis, ultimately a mapping of in-scope
 /// variables to thier values at the start and end of each function.
@@ -456,7 +45,7 @@ impl Site {
         }
     }
 
-    /// Records that a particular `tv: TaggedValue<T>` was bound to a variable
+    /// Records that a particular `tv: Tagged<T>` was bound to a variable
     /// named `var_name`.
     ///
     /// Intended for use whenever a let binding occurs. Essentially, abusing
@@ -464,12 +53,9 @@ impl Site {
     /// or return values, as long as it's properly formatted.
     /// ```
     /// 1. let x = 10;
-    /// 2. let x = site.bind("x", TaggedValue<10>)
+    /// 2. let x = site.bind("x", Tagged<10>)
     /// ```
-    pub fn bind<T>(&mut self, var_name: &str, tv: &TaggedValue<T>)
-    where
-        T: Copy,
-    {
+    pub fn bind<T>(&mut self, var_name: &str, tv: &Tagged<T>) {
         self.observed_var_tags.push((var_name.into(), tv.0));
     }
 
@@ -502,6 +88,40 @@ impl Site {
             println!("{var}:{tag:?}");
         }
         println!("---");
+    }
+}
+
+pub trait BindToSite {
+    fn bind(&self, site: &mut Site, var_name: &str);
+}
+
+impl<T> BindToSite for T {
+    default fn bind(&self, site: &mut Site, var_name: &str) {}
+}
+
+impl<T> BindToSite for Tagged<T> {
+    default fn bind(&self, site: &mut Site, var_name: &str) {
+        site.bind(var_name, self);
+    }
+}
+
+impl<T, const N: usize> BindToSite for Tagged<[T; N]> {
+    fn bind(&self, site: &mut Site, var_name: &str) {
+        site.bind(&format!("{var_name}::LEN"), &self.len());
+
+        for i in 0..N {
+            self.1[i].bind(site, &format!("{var_name}[{i}]"));
+        }
+    }
+}
+
+impl<T> BindToSite for Tagged<&[T]> {
+    fn bind(&self, site: &mut Site, var_name: &str) {
+        site.bind(&format!("{var_name}::LEN"), &self.len());
+
+        for i in 0..self.len().1 {
+            self.1[i].bind(site, &format!("{var_name}[{i}]"));
+        }
     }
 }
 
@@ -653,34 +273,32 @@ impl ATI {
         }
     }
 
-    /// Moves a value from a standard type T to a TaggedValue<T>,
+    /// Moves a value from a standard type T to a Tagged<T>,
     /// assigning it a unique Id
-    pub fn track<T>(value: T) -> TaggedValue<T>
-    where
-        T: Copy,
-    {
+    pub fn track<T>(value: T) -> Tagged<T>
+where {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
-        TaggedValue(id, value)
+        Tagged(id, value)
     }
 
-    pub fn track_array<T: Copy, const N: usize>(array: [TaggedValue<T>; N]) -> TaggedArray<TaggedValue<T>, N> {
+    pub fn track_array<T, const N: usize>(array: [Tagged<T>; N]) -> Tagged<[Tagged<T>; N]> {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
-        for i in 0..(N-1) {
-            ATI_ANALYSIS.lock().unwrap().union_tags(&array[i], &array[i+1]);
+        for i in 0..(N - 1) {
+            ATI_ANALYSIS
+                .lock()
+                .unwrap()
+                .union_tags(&array[i], &array[i + 1]);
         }
 
-        TaggedArray(id, array)
+        Tagged(id, array)
     }
 
-    pub fn track_slice<T: Copy, const N : usize>(array: [TaggedValue<T>; N]) -> TaggedSlice<TaggedValue<T>> {
-        let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
+    pub fn track_slice<'a, T, const N: usize>(array: &'a Tagged<[T; N]>) -> Tagged<&'a [T]> {
+        Tagged(array.0, &array.1)
+    }
 
-        let n = array.len();
-        for i in 0..(n-1) {
-            ATI_ANALYSIS.lock().unwrap().union_tags(&slice[i], &slice[i+1]);
-        }
-
-        TaggedSlice(id, slice as [TaggedValue<T>])
+    pub fn track_slice_2<'a, T, const N: usize>(array: &'a Tagged<&'a [T]>) -> Tagged<&'a [T]> {
+        Tagged(array.0, array.1)
     }
 
     /// Fetches a site, or creates it, with the given name.
@@ -697,10 +315,7 @@ impl ATI {
 
     /// Observe two tagged values interacting together, merging them in
     /// value_uf.
-    pub fn union_tags<T>(&mut self, tv1: &TaggedValue<T>, tv2: &TaggedValue<T>)
-    where
-        T: Copy,
-    {
+    pub fn union_tags<T>(&mut self, tv1: &Tagged<T>, tv2: &Tagged<T>) {
         self.value_uf.union_tags(&tv1.0, &tv2.0);
     }
 

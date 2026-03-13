@@ -16,7 +16,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use rustc_ast::{FieldDef, Param, ast, token};
+use rustc_ast::{FieldDef, Param, ast};
 use rustc_hir::def_id::DefId;
 use rustc_middle as mir;
 use rustc_session::parse::ParseSess;
@@ -33,6 +33,9 @@ pub struct FunctionBoundaries {
     tracked_fn_def_ids: HashSet<DefId>,
     tracked_fn_idents: HashSet<Ident>,
 
+    /// places where a track_slice needs to be inserted, as a coercion from an array to a slice type occurred
+    array_to_slice_locs: HashSet<Span>,
+
     /// places where a non-tracked function is called
     /// mapped to a string representation of the return type at that point.
     // FIXME: I'm not convinced that a string here is the best thing to store
@@ -40,15 +43,13 @@ pub struct FunctionBoundaries {
     untracked_fn_calls: HashMap<Span, String>,
 }
 
-impl FunctionBoundaries {
-    pub fn new() -> Self {
-        Self {
-            tracked_fn_def_ids: HashSet::new(),
-            tracked_fn_idents: HashSet::new(),
-            untracked_fn_calls: HashMap::new(),
-        }
+impl Default for FunctionBoundaries {
+    fn default() -> Self {
+        Self { tracked_fn_def_ids: Default::default(), tracked_fn_idents: Default::default(), array_to_slice_locs: Default::default(), untracked_fn_calls: Default::default() }
     }
+}
 
+impl FunctionBoundaries {
     ///////
     // Learn info
 
@@ -63,6 +64,10 @@ impl FunctionBoundaries {
     /// `loc`, which returned a value of type `ty`.
     pub fn observe_untracked_fn_call<'a>(&mut self, loc: Span, ty: mir::ty::Ty<'a>) {
         self.untracked_fn_calls.insert(loc, ty.to_string());
+    }
+
+    pub fn observe_slice_coercion(&mut self, loc: Span) {
+        self.array_to_slice_locs.insert(loc);
     }
 
     ///////
@@ -82,6 +87,10 @@ impl FunctionBoundaries {
     /// if one exists at that location.
     pub fn get_untracked_fn_call_ret_ty(&self, location: &Span) -> Option<&String> {
         self.untracked_fn_calls.get(location)
+    }
+
+    pub fn is_span_ref_type_coercion(&self, location: &Span) -> bool {
+        self.array_to_slice_locs.contains(location)
     }
 }
 
@@ -184,212 +193,9 @@ impl FunctionSignatures {
             })
             .map(|param| {
                 let var_name = self.get_param_name(param);
-                println!("{var_name}");
-                self.create_bind_statements(site_name, var_name, &param.ty).join("\n")
-
-                // let binds = self.get_repr_to_access_path(name, &param.ty);
-                // binds.iter().map(|(repr, ap)| format!(r#"{site_name}.bind("{repr}", &{ap});"#))
-                //     .collect::<Vec<_>>()
-                //     .join("\n")
+                format!(r#"{var_name}.bind(&mut {site_name}, "{var_name}");"#)
             })
             .collect::<Vec<String>>()
-
-        // vec!["AAAAAAAAAAAA".into()]
-    }
-
-    fn create_bind_statements(&self, site_name: &str, name: String, ty: &ast::Ty) -> Vec<String> {
-        println!("CCCCCCCCCCCCCCCCCCCC: {name}: {ty:?}");
-        match &ty.kind {
-            ast::TyKind::Slice(ty) => {
-                /*
-                    my_param: &('a)?[T] 
-
-                    for (i, p) in my_param.iter().enumerate() {
-                        site.bind(format!("my_param[{i}]"), &p);
-                    }
-                */ 
-                vec![]
-            },
-            ast::TyKind::Array(ty, anon_const) => {
-                vec![]
-            },
-            ast::TyKind::Tup(thin_vec) => {
-                vec![]
-            },
-            ast::TyKind::Ptr(mut_ty) => {
-                vec![]
-            },
-            ast::TyKind::Ref(lifetime, mut_ty) => {
-                vec![]
-            },
-            ast::TyKind::Path(qself, path) => {
-                if common::is_type_tupled_value(ty) {
-                    vec![
-                        format!(r#"{site_name}.bind("{name}", &{name});"#)
-                    ]
-                } else if common::is_type_tupled_array(ty) {
-                    let aps = self.get_tracked_access_path(&name, ty);
-                    aps.into_iter().map(|ap| {
-                        let apc = &ap;
-                        format!(r#"
-                            for (i, p) in {name}.0.iter().enumerate() {{
-                                {site_name}.bind("{apc}", &{ap});
-                            }}
-                        "#)
-                    }).collect()
-                } else if common::is_type_tupled_slice(ty) {
-                    let aps = self.get_tracked_access_path(&name, ty);
-                    aps.into_iter().map(|ap| {
-                        let apc = &ap;
-                        format!(r#"
-                            for (i, p) in {name}.iter().enumerate() {{
-                                {site_name}.bind("{apc}", {ap});
-                            }}
-                        "#)
-                    }).collect()
-                } else {
-                    vec![]
-                }
-            },
-            _ => panic!("Cannot construct bind statement for {name} with type: {ty:?}"),
-
-            // ast::TyKind::PinnedRef(lifetime, mut_ty) => todo!(),
-            // ast::TyKind::FnPtr(fn_ptr_ty) => todo!(),
-            // ast::TyKind::UnsafeBinder(unsafe_binder_ty) => todo!(),
-            // ast::TyKind::Never => todo!(),
-            // ast::TyKind::TraitObject(generic_bounds, trait_object_syntax) => todo!(),
-            // ast::TyKind::ImplTrait(node_id, generic_bounds) => todo!(),
-            // ast::TyKind::Paren(ty) => todo!(),
-            // ast::TyKind::Infer => todo!(),
-            // ast::TyKind::ImplicitSelf => todo!(),
-            // ast::TyKind::MacCall(mac_call) => todo!(),
-            // ast::TyKind::CVarArgs => todo!(),
-            // ast::TyKind::Pat(ty, ty_pat) => todo!(),
-            // ast::TyKind::Dummy => todo!(),
-            // ast::TyKind::Err(error_guaranteed) => todo!(),
-        }
-    }
-
-    fn get_tracked_access_path(&self, name: &str, ty: &ast::Ty) -> Vec<String> {
-        let mut res = Vec::new();
-        match &ty.kind {
-            ast::TyKind::Path(_, ast::Path { segments, .. }) => {
-                if common::is_type_tupled_value(&ty) {
-                    res.push(name.to_string());
-                } else if common::is_type_tupled_array(ty) {
-                    let Some(box ast::GenericArgs::AngleBracketed(ast::AngleBracketedArgs {
-                        args,
-                        ..
-                    })) = &segments
-                        .last()
-                        .expect("Found Path type with no segments")
-                        .args
-                    else {
-                        unreachable!("TaggedArray type was missing generic parameters");
-                    };
-
-                    let ast::AngleBracketedArg::Arg(ast::GenericArg::Type(box ty)) = &args[0]
-                    else {
-                        unreachable!("TaggedArray first param was not the array data type");
-                    };
-
-                    let ast::AngleBracketedArg::Arg(ast::GenericArg::Const(ast::AnonConst {
-                        value:
-                            box ast::Expr {
-                                kind: ast::ExprKind::Lit(token::Lit { symbol, .. }),
-                                ..
-                            },
-                        ..
-                    })) = &args[1]
-                    else {
-                        unreachable!("TaggedArray first param was not the array data type");
-                    };
-
-                    let aps = self.get_tracked_access_path(name, ty);
-                    let size = symbol.as_str().parse::<usize>().unwrap();
-                    for i in 0..size {
-                        for ap in &aps {
-                            res.push(format!("{ap}.0[{i}]"))
-                        }
-                    }
-                } else if let Some(fields) = self
-                    .def_structs
-                    .get(segments.iter().last().unwrap().ident.as_str())
-                {
-                    // Tracked structs
-                    for field in fields {
-                        let field_name = field
-                            .ident
-                            .expect("Only support named fields in structs")
-                            .as_str()
-                            .to_string();
-
-                        let mut aps = self
-                            .get_tracked_access_path(&field_name, &field.ty)
-                            .iter()
-                            .map(|ap| format!("{name}.{ap}"))
-                            .collect::<Vec<_>>();
-
-                        res.append(&mut aps);
-                    }
-                } else {
-                    // This is where things like Vec will show up
-                }
-            }
-
-            ast::TyKind::Array(ty, anon_const) => {
-                let aps = self.get_tracked_access_path(name, ty);
-
-                let ast::ExprKind::Lit(token::Lit { symbol, .. }) = anon_const.value.kind else {
-                    panic!("Found array with non-const size");
-                };
-                let size = symbol.as_str().parse::<usize>().unwrap();
-                for i in 0..size {
-                    for ap in &aps {
-                        res.push(format!("{ap}[{i}]"))
-                    }
-                }
-            }
-
-            ast::TyKind::Ref(_, ast::MutTy { ty, .. }) => {
-                let aps = self.get_tracked_access_path(name, ty);
-                for ap in &aps {
-                    res.push(format!("&{ap}"))
-                }
-            }
-
-            ast::TyKind::Tup(tys) => {
-                for (i, ty) in tys.iter().enumerate() {
-                    let aps = self.get_tracked_access_path(&format!("{name}.{i}"), ty);
-                    for ap in aps.into_iter() {
-                        res.push(ap);
-                    }
-                }
-            }
-
-            ast::TyKind::Slice(ty) => {
-                
-            },
-
-            _ => unreachable!(),
-            // ast::TyKind::Ptr(mut_ty) => todo!(),
-            // ast::TyKind::PinnedRef(lifetime, mut_ty) => todo!(),
-            // ast::TyKind::FnPtr(fn_ptr_ty) => todo!(),
-            // ast::TyKind::UnsafeBinder(unsafe_binder_ty) => todo!(),
-            // ast::TyKind::Never => todo!(),
-            // ast::TyKind::TraitObject(generic_bounds, trait_object_syntax) => todo!(),
-            // ast::TyKind::ImplTrait(node_id, generic_bounds) => todo!(),
-            // ast::TyKind::Paren(ty) => todo!(),
-            // ast::TyKind::Infer => todo!(),
-            // ast::TyKind::ImplicitSelf => todo!(),
-            // ast::TyKind::MacCall(mac_call) => todo!(),
-            // ast::TyKind::CVarArgs => todo!(),
-            // ast::TyKind::Pat(ty, ty_pat) => todo!(),
-            // ast::TyKind::Dummy => todo!(),
-            // ast::TyKind::Err(error_guaranteed) => todo!(),
-        };
-
-        res
     }
 
     fn create_stub(
@@ -435,7 +241,8 @@ impl FunctionSignatures {
                     let res = {fn_name}_unstubbed({passed_params});
 
                     let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{fn_name}::EXIT");
-                    site_exit.bind("RET", &res);
+
+                    res.bind(&mut site_exit, "RET");
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
 
                     return res;

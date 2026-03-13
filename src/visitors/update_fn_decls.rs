@@ -101,7 +101,7 @@ impl<'a> UpdateFnDeclsVisitor<'a> {
             None,
             ast::Path {
                 segments: [ast::PathSegment {
-                    ident: Ident::from_str("TaggedValue"),
+                    ident: Ident::from_str("Tagged"),
                     id: ast::DUMMY_NODE_ID,
                     args: Some(Box::new(ast::AngleBracketed(ast::AngleBracketedArgs {
                         span: DUMMY_SP,
@@ -119,25 +119,24 @@ impl<'a> UpdateFnDeclsVisitor<'a> {
     }
 
     fn tuple_slice(&self, slice_ty: &mut ast::Ty) {
-        // let ast::TyKind::Ref(lifetime, ast::MutTy {
-        //     box ty,
-        //     mutbl,
-        // }) = &slice_ty.kind else {
-        //     panic!("attempting to construct a TaggedSlice out of a non-Slice type: {:?}", slice_ty);
-        // };
-
-        let mut tagged_slice = ast::PathSegment::from_ident(Ident::from_str("TaggedSlice"));
+        // println!("{:#?}", slice_ty);
+        let mut tagged_slice = ast::PathSegment::from_ident(Ident::from_str("Tagged"));
         tagged_slice.args = Some(Box::new(GenericArgs::AngleBracketed(
             ast::AngleBracketedArgs {
                 span: DUMMY_SP,
-                args: [
-                    ast::AngleBracketedArg::Arg(ast::GenericArg::Type(Box::new(slice_ty.clone()))),
-                ]
+                args: [ast::AngleBracketedArg::Arg(ast::GenericArg::Type(
+                    Box::new(slice_ty.clone()),
+                ))]
                 .into(),
             },
         )));
 
-        slice_ty.kind = ast::TyKind::Path(
+        let mut outer_ref = slice_ty.clone();
+        let ast::TyKind::Ref(lt, mut_ty) = &mut outer_ref.kind else {
+            unimplemented!("Slice behind non-reference pointer is currently unimplemented")
+        };
+
+        mut_ty.ty.kind = ast::TyKind::Path(
             None,
             ast::Path {
                 span: DUMMY_SP,
@@ -146,21 +145,17 @@ impl<'a> UpdateFnDeclsVisitor<'a> {
             },
         );
 
+        slice_ty.kind = outer_ref.kind;
     }
 
     fn tuple_array(&self, array_ty: &mut ast::Ty) {
-        let ast::TyKind::Array(box ty, anon_const) = &array_ty.kind else {
-            panic!("attempting to construct a TaggedArray out of a non-Array type");
-        };
-
-        let mut tagged_array = ast::PathSegment::from_ident(Ident::from_str("TaggedArray"));
+        let mut tagged_array = ast::PathSegment::from_ident(Ident::from_str("Tagged"));
         tagged_array.args = Some(Box::new(GenericArgs::AngleBracketed(
             ast::AngleBracketedArgs {
                 span: DUMMY_SP,
-                args: [
-                    ast::AngleBracketedArg::Arg(ast::GenericArg::Type(Box::new(ty.clone()))),
-                    ast::AngleBracketedArg::Arg(ast::GenericArg::Const(anon_const.clone())),
-                ]
+                args: [ast::AngleBracketedArg::Arg(ast::GenericArg::Type(
+                    Box::new(array_ty.clone()),
+                ))]
                 .into(),
             },
         )));
@@ -192,7 +187,7 @@ impl<'a> UpdateFnDeclsVisitor<'a> {
                 self.recursively_tuple_type(inner_ty);
                 self.tuple_slice(ty);
             }
-            
+
             rustc_ast::TyKind::Array(inner_ty, _) => {
                 self.recursively_tuple_type(inner_ty);
                 self.tuple_array(ty);
