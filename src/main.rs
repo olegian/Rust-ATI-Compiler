@@ -1,101 +1,52 @@
 /* Entry point file for DATIR.
- * This file defines the callbacks that are then passed to the rustc_driver 
- * invocation in main. View the `Callbacks` struct below, which currently only
- * takes advantage of a single callback function, for more information.
+ * This file creates and orchestrates the multiple compiler invocations
+ * required to perform abstract type inference. The first compilation 
+ * gathers necessary information about the source code (namely some type
+ * information), which the second compilation uses to actually mutate the
+ * AST and to add in dynamic instrumentation.
 */
 #![feature(rustc_private)]
 #![feature(box_patterns)]
-
-// It's okay if rust-analyzer is struggling to resolve these crates.
-// If you followed the direction in the README to add the necessary rustup
-// components, everything should work fine!
+#![feature(min_specialization)]
 
 extern crate rustc_ast;
+extern crate rustc_ast_pretty;
 extern crate rustc_driver;
 extern crate rustc_errors;
+extern crate rustc_hir;
 extern crate rustc_interface;
 extern crate rustc_middle;
 extern crate rustc_parse;
 extern crate rustc_session;
 extern crate rustc_span;
 
-use rustc_ast as ast;
-use rustc_ast::mut_visit::MutVisitor;
-use rustc_driver::Compilation;
-use rustc_interface::interface;
-use rustc_middle::ty::TyCtxt;
+use std::{env, sync::Arc};
 
-use std::env;
+use crate::common::DatirConfig;
 
-mod instrumentation;
-use crate::instrumentation::{
-    TupleLiteralsVisitor, UpdateFnDeclsVisitor, create_stubs, define_types_from_file,
-};
-
-// included just for code analysis to run on ati.rs
+// included just for VsCode's rust-analyzer extension to run analysis on the runtime library
 mod ati;
+mod callbacks;
+mod common;
+mod file_loaders;
+mod types;
+mod visitors;
 
-struct Callbacks {}
-impl rustc_driver::Callbacks for Callbacks {
-    /// Called before creating the compiler instance
-    fn config(&mut self, _config: &mut interface::Config) {}
-
-    /// Called after parsing the crate root. Submodules are not yet parsed when
-    /// this callback is called. Return value instructs the compiler whether to
-    /// continue the compilation afterwards (defaults to `Compilation::Continue`)
-    fn after_crate_root_parsing(
-        &mut self,
-        compiler: &interface::Compiler,
-        krate: &mut ast::Crate,
-    ) -> Compilation {
-        // discovers all functions that will be instrumented, and updates
-        // the function signatures to tag all passed values as necessary.
-        // also updates type definitions in structs. 
-        let mut modify_params_visitor = UpdateFnDeclsVisitor::new();
-        modify_params_visitor.visit_crate(krate);
-        let modified_funcs = modify_params_visitor.get_modified_funcs();
-
-        // tuple all literals to create tags, untupling as necessary
-        // when they are passed into untracked functions
-        let mut visitor = TupleLiteralsVisitor::new(modified_funcs);
-        visitor.visit_crate(krate);
-
-        // create all required function stubs, which perform site management
-        create_stubs(krate, &compiler.sess.psess, modified_funcs);
-
-        // define all used ATI types from ati.rs
-        // do this last so that instrumentation is not applied to these types
-        let cwd = std::env::current_dir().unwrap();
-        define_types_from_file(
-            &cwd.join("src/ati/ati.rs"),
-            &compiler.sess.psess,
-            krate,
-        );
-
-        Compilation::Continue
-    }
-
-    // leaving the other callbacks just in case they are useful
-    fn after_expansion<'tcx>(
-        &mut self,
-        _compiler: &interface::Compiler,
-        _tcx: TyCtxt<'tcx>,
-    ) -> Compilation {
-        Compilation::Continue
-    }
-
-    fn after_analysis<'tcx>(
-        &mut self,
-        _compiler: &interface::Compiler,
-        _tcx: TyCtxt<'tcx>,
-    ) -> Compilation {
-        Compilation::Continue
-    }
-}
-
-/// Entry-point, forwards all arguments command line arguments to rustc_driver
+/// Entry-point, forwards all command-line arguments to rustc_driver
 pub fn main() {
     let args: Vec<_> = env::args().collect();
-    let mut cbs = Callbacks {};
+
+    // configure debug logging...
+    let mut logs = std::env::current_dir().unwrap();
+    let logs = logs.into_boxed_path();
+    let config = Arc::new(DatirConfig::debug(Some(logs)));
+
+    let mut gather_info = callbacks::gather_orig::GatherAtiInfo::new(config.clone());
+    rustc_driver::run_compiler(&args, &mut gather_info); // panics on compilation failure
+    let fbs = gather_info.first_pass_info();
+
+    // config to expose some optional functionality, for instance printing the 
+    // instrumented source code, or outputing it to a file.
+    let mut cbs = callbacks::transform_ast::TransformAbstractSyntaxTreeCallbacks::new(fbs, config);
     rustc_driver::run_compiler(&args, &mut cbs);
 }

@@ -1,11 +1,23 @@
 mod common;
-mod simple;
-mod uses_struct;
-mod nested_returns;
+
+// incomplete tests
 mod collections;
+mod simple_for_loop;
+mod type_params;
 
-// TODO: It's kind of annoying that `cargo test` ends up showing this
-// file in the output, but I honestly didn't like any of the quick solutions 
+// test suite
+mod array;
+mod multi_file;
+mod nested_returns;
+mod simple;
+mod type_hints;
+mod untracked_fns;
+mod uses_enum;
+mod uses_methods;
+mod uses_struct;
+
+
+// FIXME: It's kind of annoying that `cargo test` ends up showing this
+// file in the output, but I honestly didn't like any of the quick solutions
 // to this, and there are more interesting things to work on rn.
-
-// TODO: ADD MORE TESTS!
+// also the case for the main.rs files...

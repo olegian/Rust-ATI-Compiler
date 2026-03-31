@@ -1,4 +1,8 @@
-use std::{collections::{HashMap, HashSet}, process::Command};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    process::Command,
+};
 
 /// Delimiter printed at the end of execution, denoting the start of the
 /// rest of the ATI information.
@@ -9,34 +13,36 @@ const SITE_DELIM: &'static str = "---\n";
 
 /// Compiles `{cwd}/{test_dir}/{file_name}.rs` with the added instrumentation
 /// runs it, and returns the section of the stdout stream which contains the ATI info.
-pub fn compile_and_execute(test_dir: &str, file_name: &str) -> String {
+pub fn compile_and_execute(path: &Path) -> String {
     let invocation_dir = std::env::current_dir().unwrap();
-    let full_test_dir = invocation_dir.join(test_dir);
-    let in_path = full_test_dir.join(format!("{file_name}.rs"));
-    let out_path = full_test_dir.join(format!("{file_name}.out"));
-
-    let in_file = in_path.to_str().unwrap();
-    let out_file = out_path.to_str().unwrap();
+    let full_executable = invocation_dir.join(path);
+    let source = full_executable.parent().unwrap().join("main.rs");
 
     // Compile command
     let compile_output = Command::new("cargo")
         .args([
             "run",
             "--",
-            in_file,
+            source.to_str().unwrap(),
             "-o",
-            out_file,
+            full_executable.to_str().unwrap(),
         ])
         .output()
         .unwrap();
 
-    if !compile_output.status.success()  {
-        panic!("Unable to compile!!!");
+    if !compile_output.status.success() {
+        let e = String::from_utf8(compile_output.stderr).unwrap();
+        panic!("Unable to compile {path:?}. Error output:\n{e}");
     }
 
     // Execute command
-    let analysis_output = Command::new(out_file).output().unwrap();
-    let exec_output = String::from(str::from_utf8(&analysis_output.stdout).unwrap());
+    let analysis_output = Command::new(full_executable).output().unwrap();
+    if !analysis_output.status.success() {
+        let e = String::from_utf8(analysis_output.stderr).unwrap();
+        panic!("Unable to execute {source:?}. Error output:\n{e}");
+    }
+
+    let exec_output = String::from_utf8(analysis_output.stdout).unwrap();
 
     // chop off all print statements that have nothing to do with ATI
     let start = exec_output.find(ANALYSIS_START).unwrap();
@@ -46,55 +52,55 @@ pub fn compile_and_execute(test_dir: &str, file_name: &str) -> String {
 /// Checks that the ati stdout stream contains all the expected information,
 /// performing a partition comparison, alongside making sure the right number
 /// of sites were discovered.
-pub fn verify(mut ati_stdout: &str, expected_partition: &HashMap<&str, HashMap<&str, usize>>) {
+pub fn verify(mut ati_stdout: &str, expected_partition: &HashMap<String, HashMap<String, usize>>) {
     // checks mappings at each site are identical to expected partition
     let mut found_sites = HashSet::new();
     while let Some(end) = ati_stdout.find(SITE_DELIM) {
         let site_info: Vec<_> = ati_stdout[..end].split("\n").collect();
-        let site_name = site_info[0];
+        let mut site_iter = site_info.into_iter().filter(|s| !s.is_empty());
+        let site_name = site_iter.next().expect("Found site with no name");
+        // dbg!(&site_name);
 
         assert!(!found_sites.contains(site_name));
         found_sites.insert(site_name);
 
         // map of var -> id assigned to abstract_type, at this site.
         let mut site_ati_output = HashMap::new();
-        for var_info in &site_info[1..] {
+        for var_info in site_iter {
             if var_info.len() < 3 {
-                continue
+                eprintln!("Found var:type mapping which is malformed: {}", var_info);
+                continue;
             }
 
             let var_split: Vec<_> = var_info.split(":").collect();
-            site_ati_output.insert(var_split[0], str::parse::<usize>(var_split[1]).unwrap());
+            site_ati_output.insert(
+                String::from(var_split[0]),
+                str::parse::<usize>(var_split[1]).unwrap(),
+            );
         }
 
         // site with name has to exist
         let expected_site = expected_partition.get(site_name);
-        assert!(expected_site.is_some(), "Did not expect {site_name} to exist.");
+        assert!(
+            expected_site.is_some(),
+            "Did not expect {site_name} to exist."
+        );
 
         let expected_site = expected_site.unwrap();
-        assert!(expected_site.len() == site_ati_output.len());
+        assert_eq!(expected_site.len(), site_ati_output.len(), "Expected site {site_name} has a different number of parameter mappings that observed");
 
-        // to detect differences from expected
-        let mut actual_to_expected = HashMap::new();
-
-        // go through output...
+        let mut expected_to_actual: HashMap<&usize, &usize> = HashMap::new();
         for (var, actual_id) in site_ati_output.iter() {
-            if let Some(prev_expected_id) = actual_to_expected.get(actual_id) {
-                // ... this is not the first time we've seen this actual_id
-                // it used to map to prev_expected_id, therefore, that should still be the case
-                // with this new variable
-                let expected_id = expected_site.get(var).unwrap();
-                assert!(*prev_expected_id == expected_id, "In {site_name}, expected {var} to be in set {prev_expected_id}, but found {expected_id}");
+            let expected_id = expected_site
+                .get(var)
+                .expect(&format!("Expected site does not have var: {var}"));
+            if let Some(prev_actual_id) = expected_to_actual.get(expected_id) {
+                assert_eq!(
+                    **prev_actual_id, *actual_id,
+                    "Var {var} was found in a wrong set"
+                );
             } else {
-                // first time seeing this, check that this variable does exist in the
-                // expected parition
-                let expected_id = expected_site.get(var);
-                assert!(expected_id.is_some());
-
-                // forever associate whatever id the analysis spit out
-                // with the one we expect.
-                let expected_id = expected_id.unwrap();
-                actual_to_expected.insert(actual_id, expected_id);
+                expected_to_actual.insert(expected_id, actual_id);
             }
         }
 
@@ -102,7 +108,61 @@ pub fn verify(mut ati_stdout: &str, expected_partition: &HashMap<&str, HashMap<&
     }
 
     // found_sites contains no duplicates, so as long as we were able
-    // to match all found_sites to those in expected_partition,
-    // we have equality!
     assert!(found_sites.len() == expected_partition.len());
+}
+
+pub fn delete(exec: &Path) {
+    match std::fs::remove_file(exec) {
+        Ok(_) => {}
+        Err(_) => println!("Unable to remove old file."),
+    }
+}
+
+pub struct ExpectedSite {
+    name: String,
+    partition: HashMap<String, usize>,
+}
+
+impl ExpectedSite {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: String::from(name),
+            partition: HashMap::new(),
+        }
+    }
+
+    pub fn register(mut self, var: &str, comparibility: usize) -> Self {
+        self.partition.insert(String::from(var), comparibility);
+        self
+    }
+
+    pub fn register_array(mut self, name: &str, len: usize, elem_comparibility: usize, len_comparibility: usize) -> Self {
+        let name = String::from(name);
+        for i in 0..len {
+            self.partition.insert(format!("{name}[{i}]"), elem_comparibility);
+        }
+
+        self.partition.insert(format!("{name}_LEN"), len_comparibility);
+        self
+    }
+
+    pub fn build(self) -> (String, HashMap<String, usize>) {
+        (self.name, self.partition)
+    }
+}
+
+#[derive(Default)]
+pub struct ExpectedOutput(HashMap<String, HashMap<String, usize>>);
+impl ExpectedOutput {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+    pub fn register_site(&mut self, site: ExpectedSite) {
+        let (name, site) = site.build();
+        self.0.insert(name, site);
+    }
+
+    pub fn inner(&self) -> &HashMap<String, HashMap<String, usize>> {
+        &self.0
+    }
 }
