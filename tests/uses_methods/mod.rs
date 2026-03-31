@@ -53,6 +53,21 @@ fn uses_methods() {
             .register("unused_param", 2),
     );
 
+    expected.register_site(
+        ExpectedSite::new("Counter::add_3::ENTER")
+            .register("self.val", 0)
+            .register("self.unused", 1)
+            .register("unused_param", 2),
+    );
+    expected.register_site(
+        ExpectedSite::new("Counter::add_3::EXIT")
+            .register("self.val", 0)
+            .register("self.unused", 1)
+            .register("unused_param", 2)
+            .register("RET.val", 0)
+            .register("RET.unused", 1)
+    );
+
     let executable = Path::new(file!()).parent().unwrap().join("methods.out");
     delete(&executable);
 

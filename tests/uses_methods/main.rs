@@ -20,11 +20,16 @@ impl Counter {
     fn add_2(&mut self, amount: u32, unused_param: u32) {
         self.val = self.val + amount;
     }
+
+    fn add_3(self, unused_param: u32) -> Self {
+        self
+    }
 }
 
 #[ignore]
 fn main() {
     let mut c = Counter::new(5, 99);
     let r = c.add_1(3, 10);
-    c.add_2(2, 0);
+    c.add_2(2, 99);
+    c.add_3(99);
 }

@@ -35,13 +35,13 @@ fn multi_file() {
             .register("RET", 1),
     );
     expected.register_site(
-        ExpectedSite::new("dep::foo_unstubbed::ENTER")
+        ExpectedSite::new("dep::foo0::ENTER")
             .register("x", 0)
             .register("y", 1)
             .register("z", 2),
     );
     expected.register_site(
-        ExpectedSite::new("dep::foo_unstubbed::EXIT")
+        ExpectedSite::new("dep::foo0::EXIT")
             .register("x", 0)
             .register("y", 0)
             .register("z", 1)

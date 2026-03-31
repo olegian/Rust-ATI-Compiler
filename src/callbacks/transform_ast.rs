@@ -18,7 +18,7 @@ use crate::{
     file_loaders::transforming_loader::{FileType, Passes, TransformingFileLoader},
     types::ati_info::FirstPassInfo,
     visitors::{
-        AddInstrumentationVisitor, UpdateTypesVisitor, add_crate_attribute, define_types_from_file, import_root_crate
+        TransformVisitor, add_crate_attribute, define_types_from_file, generate_stubs, import_root_crate
     },
 };
 
@@ -52,31 +52,14 @@ impl<'a> rustc_driver::Callbacks for TransformAbstractSyntaxTreeCallbacks {
                   mut krate: &mut ast::Crate,
                   ftype: &FileType,
                   module_path: &str| {
-                // This visitor converts all expressions:
-                // 1. Literals -> tracked, tagged literals (`1` -> `ATI::track(1)`)
-                // 2. Arrays -> tracked, tagged arrays (`[1; 3]` -> `ATI::track_array([1; 3])`).
-                //    note that the inner `1` expr would've been converted via step (1)
-                // 3. Slices -> tracked, tagged slices (`&[1; 3] as [usize]` -> `ATI::track_slice(&[1; 3])`).
-                // 4. If/While conditions are untupled, so they still work.
-                // 5. Binary-ops / assign-ops into Block expressions that merge together appropriate tags
-                // 6. Indexes in Index expressions are untupled, so the index can be used to access the collection
-                let mut inst_vis = AddInstrumentationVisitor::new(&first_pass, psess);
-                inst_vis.visit_crate(&mut krate);
-
-                // discovers all functions that will be instrumented, and updates
-                // the function signatures to tag all passed-in params, if necessary.
-                // also updates type definitions in structs to have fields be tagged.
-                let mut types_vis = UpdateTypesVisitor::new(&first_pass, module_path);
-                types_vis.collect_known_idents(krate);
-                types_vis.visit_crate(&mut krate);
+                // Single visitor that performs both expression instrumentation
+                // (literals, binary ops, calls, etc.) and type wrapping (Tagged<T>)
+                // in one AST walk.
+                let mut visitor = TransformVisitor::new(&first_pass, psess);
+                visitor.visit_crate(&mut krate);
 
                 // create all required function stubs, which perform site management
-                let stub_info = types_vis.get_fn_signatures();
-                stub_info.create_stub_items(&mut krate, &psess);
-
-                if datir_config.print_function_signatures {
-                    datir_config.log("StubInfo", format!("{:#?}", stub_info));
-                }
+                generate_stubs(&datir_config, krate, &first_pass, module_path, psess);
 
                 // make the ATI types available to dependancies
                 if matches!(ftype, FileType::Dep) {
