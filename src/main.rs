@@ -37,10 +37,10 @@ mod visitors;
 pub fn main() {
     let mut args: Vec<_> = env::args().collect();
 
-    // configure debug logging...
+    // Use debug logging / outputs when invoked via `cargo run -- <root.rs>` for now.
     // FIXME: improve this, I should figure out a better way of passing flags and having the behavior appropriately change
     // it's hard as there are multiple compile invocations, all of which could take different flags
-    let config = if args.ends_with(&["test_invocation".to_string()]) {
+    let config = if args.ends_with(&["TEST_INVOCATION".to_string()]) {
         args.pop();
         Arc::new(DatirConfig::release())
     } else {

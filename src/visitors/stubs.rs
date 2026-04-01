@@ -1,8 +1,11 @@
-/* Walks the already-transformed AST to generate function stubs and BindToSite impls.
- *
- * Iterates krate.items directly so that it can read AST nodes by reference
- * (params, types, fields) while generating stub code strings, without cloning
- * any AST nodes.
+/* Walks the already-transformed AST to generate function stubs and BindToSite impls
+ * to perform ENTER/EXIT site management.
+ * 
+ * Importantly, all instrumented functions are renamed to a new "inner" name,
+ * the generated stub will be called the original function name, and then invoke
+ * this inner function. Name conflicts are avoided by scanning over all user-defined
+ * functions and methods, and then finding a suffix to append to the inner name
+ * that makes it unique.
 */
 use rustc_ast::{self as ast};
 use rustc_ast_pretty::pprust;
@@ -12,8 +15,10 @@ use rustc_span::Ident;
 use crate::common::{DatirConfig, parsing};
 use std::collections::{HashMap, HashSet};
 
-/// specifically a string that is an invalid name for a struct or enum.
+/// The namespace that free functions are defined under.
+/// This is specifically a string that is an invalid name for a struct or enum.
 const REGULAR_FUNCTION_NAMESPACE: &'static str = "-REGULAR-";
+
 /// Map of a namespace (the type of Self, or REGULAR_FUNCTION_NAMESPACE) to 
 /// a set of all methods/functions defined in that namespace.
 type KnownNames = HashMap<String, HashSet<String>>;
@@ -49,17 +54,20 @@ pub fn generate_stubs(
     let mut stub_code: Vec<String> = Vec::new();
     for item in krate.items.iter_mut() {
         match &mut item.kind {
+            // we found a free function!
             ast::ItemKind::Fn(box ast::Fn {
                 ident,
                 sig: ast::FnSig { decl, .. },
                 ..
             }) => {
+                // generate a non-clashing inner name based off the original name
                 let orig_name = ident.as_str().to_string();
                 let new_name = get_unique_inner_name(None, &orig_name, &known_names);
                 if datir_config.print_function_signatures {
                     datir_config.log("FunctionStubs", format!("Fn Stub: {:#?}", new_name));
                 }
 
+                // create a function stub for this function, to be added to the crate later
                 stub_code.push(create_fn_stub(
                     module_path,
                     &orig_name,
@@ -68,25 +76,37 @@ pub fn generate_stubs(
                     &decl.output,
                 ));
 
+                // rename the original function to the inner name
                 *ident = Ident::from_str(&new_name);
             }
 
+            // we found a struct definition
             ast::ItemKind::Struct(ident, _, ast::VariantData::Struct { fields, .. }) => {
+                // structs, when passed between function boundaries need to be bind-ed to 
+                // sites. This requires implementing the BindToSite trait on them, defined
+                // in the runtime library.
                 stub_code.push(create_struct_bind_impl(ident.as_str(), fields));
             }
 
+            // we found an enum definition
             ast::ItemKind::Enum(ident, _, ast::EnumDef { variants }) => {
+                // similar to structs, enums require the BindToSite trait to be impled as well
                 stub_code.push(create_enum_bind_impl(ident.as_str(), variants));
             }
 
+            // we found an impl block, defining methods on some type `self_ty`
             ast::ItemKind::Impl(ast::Impl {
                 self_ty, items, ..
             }) => {
                 let type_name = pprust::ty_to_string(self_ty);
+
                 // separate method stubs vec to only construct a single
                 // impl which contains all of the new stub functions
                 let mut method_stubs: Vec<String> = Vec::new();
 
+                // iterate through all methods defined in this impl block
+                // and perform a similar transformation as the one done for 
+                // free functions above.
                 for assoc_item in items.iter_mut() {
                     let ast::AssocItemKind::Fn(box ast::Fn {
                         ident,
@@ -127,6 +147,7 @@ pub fn generate_stubs(
         }
     }
 
+    // actually add all the code to the crate
     for code in stub_code {
         for item in parsing::parse_items(psess, code, None) {
             krate.items.insert(0, item);
@@ -175,6 +196,8 @@ fn find_all_names(krate: &ast::Crate) -> KnownNames {
 
 }
 
+/// Creates a unique site name based off the file the function is defined in,
+/// alongside the name of the function that this site corresponds to.
 fn qualified_site_name(module_path: &str, name: &str) -> String {
     if module_path.is_empty() {
         name.to_string()
@@ -183,6 +206,8 @@ fn qualified_site_name(module_path: &str, name: &str) -> String {
     }
 }
 
+/// Creates an inner name that does not clash with any other function/method 
+/// defined in the file.
 fn get_unique_inner_name(namespace: Option<&str>, original: &str, known_names: &KnownNames) -> String {
     let Some(known) = (match namespace {
         Some(type_name) =>  {
@@ -205,8 +230,10 @@ fn get_unique_inner_name(namespace: Option<&str>, original: &str, known_names: &
     candidate
 }
 
+/// Determines whether a list of parameters being passed to some
+/// function or method accepts self, &self, &mut self.
 fn determine_receiver_kind(params: &[ast::Param]) -> ReceiverKind {
-    // is the self parameter always the first one?
+    // can the self parameter be something other than the first param?
     let Some(first) = params.first() else {
         return ReceiverKind::None;
     };
@@ -224,6 +251,8 @@ fn determine_receiver_kind(params: &[ast::Param]) -> ReceiverKind {
     }
 }
 
+/// gets the name of a parameter passed to some function
+// FIXME: I'm not sure why using pprust::pat_to_string(param.pat) instead causes a panic?
 fn get_param_name(param: &ast::Param) -> String {
     match param.pat.kind {
         rustc_ast::PatKind::Ident(_, ident, _) => ident.as_str().to_string(),
@@ -253,6 +282,15 @@ fn create_param_binds<'a>(site_name: &str, params: impl Iterator<Item=&'a ast::P
 
 // ========== Stub generation ==========
 
+/// Creates a stub for a free function using the passed in information.
+/// 
+/// A function stub will create an ENTER site, with each input parameter bound to it, and 
+/// an EXIT site with each input parameter and the return value bound. Between these two 
+/// sites, the corresponding inner function is invoked. Importantly, the stub has the 
+/// same original name of the inner function, which means any invocation of that function
+/// will now invoke this stub instead.
+/// 
+/// Abstract Type information about the inputs and outputs is reported at these locations.
 fn create_fn_stub(
     module_path: &str,
     fn_name: &str,
@@ -344,6 +382,8 @@ fn create_fn_stub(
     }
 }
 
+/// Similar to create_fn_stub, this function instead creates a stub for a method defined on some
+/// type. See `create_fn_stub` for more information.
 fn create_method_stub(
     module_path: &str,
     type_name: &str,
@@ -467,6 +507,11 @@ fn create_method_stub(
     }
 }
 
+/// Implements the BindToSite trait (defined in the runtime library) on some struct.
+/// 
+/// This allows calling struct.bind(site) to recursively associated all fields of the
+/// struct with the passed in site. Stub functions rely on this to add all relevant 
+/// values to sites.
 fn create_struct_bind_impl(struct_name: &str, fields: &[ast::FieldDef]) -> String {
     let bind_calls = fields
         .iter()
@@ -495,6 +540,7 @@ fn create_struct_bind_impl(struct_name: &str, fields: &[ast::FieldDef]) -> Strin
     )
 }
 
+/// Implements the BindToSite trait on some Enum. See comment for `create_struct_bind_impl`.
 fn create_enum_bind_impl(enum_name: &str, variants: &[ast::Variant]) -> String {
     let arms: Vec<String> = variants
         .iter()

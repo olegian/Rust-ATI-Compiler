@@ -26,7 +26,7 @@ pub fn compile_and_execute(path: &Path) -> String {
             source.to_str().unwrap(),
             "-o",
             full_executable.to_str().unwrap(),
-            "test_invocation",
+            "TEST_INVOCATION",
         ])
         .output()
         .unwrap();
