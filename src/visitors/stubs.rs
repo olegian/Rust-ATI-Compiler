@@ -9,8 +9,7 @@ use rustc_ast_pretty::pprust;
 use rustc_session::parse::ParseSess;
 use rustc_span::Ident;
 
-use crate::common::{self, DatirConfig, parsing};
-use crate::types::ati_info::{FirstPassInfo};
+use crate::common::{DatirConfig, parsing};
 use std::collections::{HashMap, HashSet};
 
 /// specifically a string that is an invalid name for a struct or enum.

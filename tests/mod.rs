@@ -2,7 +2,7 @@ mod common;
 
 // incomplete tests
 mod collections;
-mod simple_for_loop;
+mod loops;
 mod type_params;
 
 // test suite

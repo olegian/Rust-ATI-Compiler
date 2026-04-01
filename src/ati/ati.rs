@@ -30,7 +30,7 @@ pub static ATI_ANALYSIS: std::sync::LazyLock<std::sync::Arc<std::sync::Mutex<ATI
 pub struct Site {
     type_uf: UnionFind,
     var_tags: std::collections::BTreeMap<String, Id>,
-    observed_var_tags: Vec<(String, Id)>,
+    observed_var_tags: std::collections::HashMap<String, Id>,
     name: String, // Debug information
 }
 
@@ -40,7 +40,7 @@ impl Site {
         Site {
             type_uf: UnionFind::new(),
             var_tags: std::collections::BTreeMap::new(),
-            observed_var_tags: Vec::new(),
+            observed_var_tags: std::collections::HashMap::new(),
             name: name.to_owned(),
         }
     }
@@ -55,28 +55,73 @@ impl Site {
     /// 1. let x = 10;
     /// 2. let x = site.bind("x", Tagged<10>)
     /// ```
-    pub fn bind<T>(&mut self, var_name: &str, tv: &Tagged<T>) {
-        self.observed_var_tags.push((var_name.into(), tv.0));
+    pub fn bind(&mut self, var_name: &str, id: Id) {
+        self.observed_var_tags.insert(var_name.into(), id);
     }
 
     /// Algorithm from paper, updates ATI information based on observed_vars
     pub fn update(&mut self, value_uf: &mut UnionFind) {
-        for (new_var, new_var_tag) in &self.observed_var_tags {
-            let new_leader_tag = value_uf.find(new_var_tag).unwrap(); // ? is this unwrap safe? 
-            let new_leader_tag = self.type_uf.introduce_tag(new_leader_tag);
+        // for each variable
+        for (var, new_tag) in self.observed_var_tags.iter_mut() {
+            match self.var_tags.get_mut(var) {
+                // we have previously seen this variable at this site, 
+                // and chosen some previous leader tag (within the value_uf)
+                // to be the canonnical representation for the abstract type 
+                // associated with this variable.
+                Some(prev_leader) => {
+                    let new_leader = value_uf.find(prev_leader).unwrap();
+                    if new_leader != *prev_leader {
+                        // the leader has changed, merge new leader with old leader in 
+                        // type_uf, and update the new_tag 
 
-            if let Some(old_tag) = self.var_tags.get(new_var) {
-                let old_leader_tag = value_uf.find(old_tag).unwrap();
+                        // make sure type_uf is aware of this new leader,
+                        self.type_uf.introduce_tag(new_leader);
+                        *prev_leader = self.type_uf.union_tags(&prev_leader, &new_leader).unwrap();
+                    }
 
-                let merged = self
-                    .type_uf
-                    .union_tags(&old_leader_tag, &new_leader_tag)
-                    .unwrap();
-                self.var_tags.insert(new_var.clone(), merged);
-            } else {
-                self.var_tags.insert(new_var.clone(), new_leader_tag);
+                    let new_tag_leader = value_uf.find(new_tag).unwrap();
+                    self.type_uf.introduce_tag(new_tag_leader);
+                    let tmp = self.type_uf.union_tags(&new_tag_leader, &prev_leader).unwrap();
+
+                    self.var_tags.insert(var.clone(), tmp);
+                },
+
+                // this is the first time we are observing this variable at this site.
+                // make the value_uf leader of whatever Id is associated with the current value 
+                // stored within this variable the canonnical abstract type set of this variable.
+                None => {
+                    // find the current leader tag associated with the value's interaction set
+                    let leader = value_uf.find(new_tag).unwrap();
+
+                    // make sure that the type_uf is aware that this leader tag is a representative
+                    // of a new abstract type set. If this leader already corresponds to some existing
+                    // AT set, then this results in a no-op. "The type_uf was already introduced to this
+                    // AT set before!"
+                    self.type_uf.introduce_tag(leader);
+                    let leader = self.type_uf.find(&leader).unwrap();
+
+                    // record that this variable is within the AT set represented by the leader
+                    self.var_tags.insert(var.clone(), leader);
+                },
             }
         }
+
+        // for (new_var, new_var_tag) in &self.observed_var_tags {
+        //     let new_leader_tag = value_uf.find(new_var_tag).unwrap(); // ? is this unwrap safe? 
+        //     let new_leader_tag = self.type_uf.introduce_tag(new_leader_tag);
+
+        //     if let Some(old_tag) = self.var_tags.get(new_var) {
+        //         let old_leader_tag = value_uf.find(old_tag).unwrap();
+
+        //         let merged = self
+        //             .type_uf
+        //             .union_tags(&old_leader_tag, &new_leader_tag)
+        //             .unwrap();
+        //         self.var_tags.insert(new_var.clone(), merged);
+        //     } else {
+        //         self.var_tags.insert(new_var.clone(), new_leader_tag);
+        //     }
+        // }
 
         // self.observed_var_tags.clear(); // done merging these vars in!
     }
@@ -101,13 +146,13 @@ impl<T> BindToSite for T {
 
 impl<T> BindToSite for Tagged<T> {
     default fn bind(&self, site: &mut Site, var_name: &str) {
-        site.bind(var_name, self);
+        site.bind(var_name, self.0);
     }
 }
 
 impl<T, const N: usize> BindToSite for Tagged<[T; N]> {
     fn bind(&self, site: &mut Site, var_name: &str) {
-        site.bind(&format!("{var_name}_LEN"), &self.len());
+        site.bind(&format!("{var_name}_LEN"), self.len().0);
 
         for i in 0..N {
             self.1[i].bind(site, &format!("{var_name}[{i}]"));
@@ -117,7 +162,7 @@ impl<T, const N: usize> BindToSite for Tagged<[T; N]> {
 
 impl<T> BindToSite for Tagged<&[T]> {
     fn bind(&self, site: &mut Site, var_name: &str) {
-        site.bind(&format!("{var_name}_LEN"), &self.len());
+        site.bind(&format!("{var_name}_LEN"), self.len().0);
 
         for i in 0..self.len().1 {
             self.1[i].bind(site, &format!("{var_name}[{i}]"));
@@ -276,7 +321,7 @@ impl ATI {
     /// Moves a value from a standard type T to a Tagged<T>,
     /// assigning it a unique Id
     pub fn track<T>(value: T) -> Tagged<T>
-where {
+    where {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
         Tagged(id, value)
     }
@@ -305,6 +350,7 @@ where {
     /// Update abstract types at this site, then store it back
     /// into the map. Call whenever you are done registering variables to a site.
     pub fn update_site(&mut self, mut site: Site) {
+        println!("UPDATING SITE: {}", site.name);
         site.update(&mut self.value_uf);
         self.sites.stash(site);
     }
