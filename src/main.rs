@@ -8,6 +8,8 @@
 #![feature(rustc_private)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
+#![feature(step_trait)]
+#![feature(new_range_api)]
 
 extern crate rustc_ast;
 extern crate rustc_ast_pretty;

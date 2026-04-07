@@ -108,62 +108,6 @@ impl Site {
         println!("---");
     }
 }
-
-/// The BindToSite trait is defined for all type T, and allows
-/// for all data types to be observed at a particular site. The
-/// `T.bind()` function is called within function stubs.
-pub trait BindToSite {
-    fn bind(&self, site: &mut Site, var_name: &str);
-}
-
-/// Most generic implementation used by all non-tagged types.
-impl<T> BindToSite for T {
-    default fn bind(&self, site: &mut Site, var_name: &str) {}
-}
-
-/// Most generic implementation used by all tagged types.
-impl<T> BindToSite for Tagged<T> {
-    default fn bind(&self, site: &mut Site, var_name: &str) {
-        site.bind(var_name, self.0);
-    }
-}
-
-impl<T> BindToSite for &Tagged<T> {
-    default fn bind(&self, site: &mut Site, var_name: &str) {
-        site.bind(var_name, self.0);
-    }
-}
-
-impl<T> BindToSite for &mut Tagged<T> {
-    default fn bind(&self, site: &mut Site, var_name: &str) {
-        site.bind(var_name, self.0);
-    }
-}
-
-/// More specific implementation, used when binding arrays.
-/// This has every element of the array be represented within the site,
-/// alongside the length of the array.
-impl<T, const N: usize> BindToSite for Tagged<[T; N]> {
-    fn bind(&self, site: &mut Site, var_name: &str) {
-        site.bind(&format!("{var_name}_LEN"), self.len().0);
-
-        for i in 0..N {
-            self.1[i].bind(site, &format!("{var_name}[{i}]"));
-        }
-    }
-}
-
-/// Similar to BindToSite for Tagged<[T; N]>, but for slices instead!
-impl<T> BindToSite for Tagged<&[T]> {
-    fn bind(&self, site: &mut Site, var_name: &str) {
-        site.bind(&format!("{var_name}_LEN"), self.len().0);
-
-        for i in 0..self.len().1 {
-            self.1[i].bind(site, &format!("{var_name}[{i}]"));
-        }
-    }
-}
-
 /// Manages multiple Sites at once, to allow for analyzing multiple functions
 pub struct Sites {
     locs: std::collections::BTreeMap<String, Site>,

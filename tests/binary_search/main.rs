@@ -12,9 +12,9 @@ fn main() {
         95, 96, 97, 98, 99, 100,
     ];
 
-    let a = generic_bin_search(&arr, 50, 0, arr.len());
-    let b = generic_bin_search(&arr, 101, 0, arr.len());
-    let c = generic_bin_search(&arr, 3, 0, arr.len());
+    let a = concrete_bin_search(&arr, 50, 0, arr.len());
+    let b = concrete_bin_search(&arr, 101, 0, arr.len());
+    let c = concrete_bin_search(&arr, 3, 0, arr.len());
 
     println!("{a:?}, {b:?}, {c:?}")
 }
@@ -38,17 +38,17 @@ where
 }
 
 
-// fn concrete_bin_search(haystack: &[u32], needle: u32, lo: usize, hi: usize) -> Option<usize> {
-//     if haystack.len() <= lo {
-//         return None;
-//     }
+fn concrete_bin_search(haystack: &[u32], needle: u32, lo: usize, hi: usize) -> Option<usize> {
+    if haystack.len() <= lo {
+        return None;
+    }
 
-//     let mid = lo + (hi - lo) / 2;
-//     return if haystack[mid] == needle {
-//         Some(mid)
-//     } else if needle < haystack[mid] {
-//         concrete_bin_search(haystack, needle, lo, mid - 1)
-//     } else {
-//         concrete_bin_search(haystack, needle, mid + 1, hi)
-//     }
-// }
+    let mid = lo + (hi - lo) / 2;
+    return if haystack[mid] == needle {
+        Some(mid)
+    } else if needle < haystack[mid] {
+        concrete_bin_search(haystack, needle, lo, mid - 1)
+    } else {
+        concrete_bin_search(haystack, needle, mid + 1, hi)
+    }
+}

@@ -184,7 +184,6 @@ impl<'a> MutVisitor for TransformVisitor<'a> {
             }
 
             ast::ExprKind::Range(lo, hi, limits) => {
-                // lo.map(|lo| *lo = *self.untuple(lo));
                 lo.as_mut().map(|lo|  {
                     *lo = self.untuple(lo.clone());
                 });

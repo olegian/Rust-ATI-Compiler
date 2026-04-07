@@ -85,6 +85,12 @@ impl<'tcx, 'a> Visitor<'tcx> for AnalyzeHirVisitor<'tcx, 'a> {
                     self.first_pass.observe_slice_coercion(expr.span);
                 }
             }
+
+            hir::ExprKind::Index(recv, idx, _) => {
+                let ldid = expr.hir_id.owner.def_id;
+                let typeck = self.tcx.typeck(ldid);
+                println!("FOUND: {:?}", typeck.expr_ty(idx));
+            }
             _ => {}
         }
 
