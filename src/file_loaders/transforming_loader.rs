@@ -109,7 +109,7 @@ impl FileContents {
 
         let mut module_segments = segments;
 
-        // `foo/mod.rs` → module path is just `foo`, not `foo::mod`
+        // `foo/mod.rs` -> module path is just `foo`, not `foo::mod`
         if module_segments.last() == Some(&"mod") {
             module_segments.pop();
         }
