@@ -90,16 +90,6 @@ impl<'a> rustc_driver::Callbacks for TransformAbstractSyntaxTreeCallbacks {
             &compiler.sess.psess,
             krate,
         );
-        // add_crate_attribute(
-        //     "#![feature(step_trait)]",
-        //     &compiler.sess.psess,
-        //     krate,
-        // );
-        // add_crate_attribute(
-        //     "#![feature(new_range_api)]",
-        //     &compiler.sess.psess,
-        //     krate,
-        // );
 
         Compilation::Continue
     }

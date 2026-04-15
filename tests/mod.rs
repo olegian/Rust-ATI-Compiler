@@ -7,6 +7,7 @@ mod type_params;
 
 // test suite
 mod array;
+mod array_high_dim;
 mod multi_file;
 mod nested_returns;
 mod simple;

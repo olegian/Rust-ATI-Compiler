@@ -4,6 +4,60 @@ use std::{
     process::Command,
 };
 
+/// Helpful iterators for constructing array outputs.
+/// Accepts a slice of lengths, dims, and offers the cartesian product
+/// over all dims.
+/// 
+/// e.g. using dims= [1, 2, 3] 
+/// will offer up:
+///   [0, 0, 0],
+///   [0, 0, 1],
+///   [0, 0, 2],
+///   [0, 1, 0],
+///   [0, 1, 1],
+///   ...
+struct CartesianProductIterator {
+    dims: Vec<usize>,
+    next: Vec<usize>,
+}
+
+impl CartesianProductIterator {
+    pub fn new(dims: Vec<usize>) -> Option<Self> {
+        if dims.is_empty() || dims.iter().any(|&d| d == 0) {
+            return None;
+        }
+
+        let n = dims.len();
+        Some(CartesianProductIterator {
+            dims,
+            next: vec![0; n],
+        })
+    }
+}
+
+impl Iterator for CartesianProductIterator {
+    type Item = Vec<usize>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next[0] >= self.dims[0] {
+            return None;
+        }
+
+        let res = self.next.clone();
+
+        let n = self.dims.len();
+        let mut i = n - 1;
+        self.next[i] += 1;
+        while i > 0 && self.next[i] >= self.dims[i] {
+            self.next[i] = 0;
+            i -= 1;
+            self.next[i] += 1;
+        }
+
+        Some(res)
+    }
+}
+
 /// Delimiter printed at the end of execution, denoting the start of the
 /// rest of the ATI information.
 const ANALYSIS_START: &'static str = "===ATI-ANALYSIS-START===\n";
@@ -26,7 +80,7 @@ pub fn compile_and_execute(path: &Path) -> String {
             source.to_str().unwrap(),
             "-o",
             full_executable.to_str().unwrap(),
-            "TEST_INVOCATION",
+            "--test",
         ])
         .output()
         .unwrap();
@@ -144,18 +198,37 @@ impl ExpectedSite {
     pub fn register_array(
         mut self,
         name: &str,
-        len: usize,
+        mut dims: Vec<usize>,
         elem_comparibility: usize,
-        len_comparibility: usize,
+        dim_comparibility: Vec<usize>,
     ) -> Self {
         let name = String::from(name);
-        for i in 0..len {
-            self.partition
-                .insert(format!("{name}[{i}]"), elem_comparibility);
+        let idx_f_string = "[-<>-]".repeat(dims.len());
+        for dim_idxs in CartesianProductIterator::new(dims.clone()).unwrap() {
+            let mut repr = idx_f_string.clone();
+            for i in dim_idxs {
+                repr = repr.replacen("-<>-", &i.to_string(), 1);
+            }
+
+            self.partition.insert(format!("{}{}", name, repr), elem_comparibility);
         }
 
-        self.partition
-            .insert(format!("{name}_LEN"), len_comparibility);
+        let dim_len = dims.len();
+        for i in 1..dim_len {
+            dims.pop();
+            let len_f_string = "[-<>-]".repeat(dims.len());
+            for dim_idxs in CartesianProductIterator::new(dims.clone()).unwrap() {
+                let mut repr = len_f_string.clone();
+                for i in dim_idxs {
+                    repr = repr.replacen("-<>-", &i.to_string(), 1);
+                }
+                
+                self.partition.insert(format!("{}{}_LEN", name, repr), dim_comparibility[dim_comparibility.len() - i]);
+            }
+        }
+
+        self.partition.insert(format!("{}_LEN", name), dim_comparibility[0]);
+        
         self
     }
 
@@ -177,5 +250,32 @@ impl ExpectedOutput {
 
     pub fn inner(&self) -> &HashMap<String, HashMap<String, usize>> {
         &self.0
+    }
+}
+
+// FIXME: move away from print based tests, use actual assertions
+#[cfg(test)]
+mod tests {
+    use crate::common::{CartesianProductIterator, ExpectedSite};
+
+    #[test]
+    fn test_iter() {
+        let dims: Vec<usize> = vec![3, 4, 5];
+        let iter = CartesianProductIterator::new(dims).unwrap();
+        for x in iter {
+            println!("{x:?}");
+        }
+    }
+
+    #[test]
+    fn test_array_site() {
+        let site = ExpectedSite::new("test::site").register_array(
+            "arr",
+            vec![3, 4, 5],
+            0,
+            vec![1, 2, 3]
+        );
+
+        println!("{:#?}", site.build());
     }
 }

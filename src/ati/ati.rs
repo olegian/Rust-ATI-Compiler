@@ -107,7 +107,52 @@ impl Site {
         }
         println!("---");
     }
+
+    /// Emits the variable blocks for this site in .decls format.
+    pub fn produce_decls(&mut self, output: &mut std::fs::File) {
+        use std::io::Write;
+
+        for (var, tag) in self.var_tags.iter() {
+            let Some(var) = collapse_array_indices(var) else {
+                continue;
+            };
+            let var = var.replace('\\', "\\\\").replace(' ', "\\_");
+            writeln!(output, "variable {}", var).unwrap();
+            writeln!(output, "  comparability {tag}").unwrap();
+        }
+    }
 }
+
+fn collapse_array_indices(name: &str) -> Option<String> {
+    if name.ends_with(']') {
+        let (base, rest) = name.split_once('[').unwrap();
+        // `rest` looks like `0]`, `0][0]`, `3][7]`, etc.
+        // Representative iff every bracketed index is `0`
+        let is_representative = rest.replace("0]", "").replace('[', "").is_empty();
+        return is_representative.then(|| format!("{base}[..]"));
+    }
+
+    if name.ends_with("_LEN") {
+        if name.contains('[') {
+            return None;
+        }
+        return Some(name.to_string());
+    }
+
+    Some(name.to_string())
+}
+
+// FIXME: this should really just be a stored value rather than something that is extracted
+fn ppt_type_from_name(name: &str) -> &'static str {
+    if name.ends_with(":::ENTER") {
+        "enter"
+    } else if name.ends_with(":::EXIT") {
+        "exit"
+    } else {
+        panic!("unsupported ppt-type in site name: {}", name)
+    }
+}
+
 /// Manages multiple Sites at once, to allow for analyzing multiple functions
 pub struct Sites {
     locs: std::collections::BTreeMap<String, Site>,
@@ -139,7 +184,21 @@ impl Sites {
     pub fn report(&mut self) {
         println!("===ATI-ANALYSIS-START===");
         for (_, site) in self.locs.iter_mut() {
+            
             site.report();
+        }
+    }
+
+    /// Emits a .decls file covering all sites.
+    pub fn produce_decls(&mut self, mut output: std::fs::File) {
+        use std::io::Write;
+
+        for (name, site) in self.locs.iter_mut() {
+            let pt_name = name.replace('\\', "\\\\").replace(' ', "\\_");
+            writeln!(output, "ppt {}", pt_name).unwrap();
+            writeln!(output, "ppt-type {}", ppt_type_from_name(name)).unwrap();
+            site.produce_decls(&mut output);
+            writeln!(output, "").unwrap();
         }
     }
 }
@@ -274,6 +333,9 @@ impl ATI {
         Tagged(id, value)
     }
 
+    // FIXME: This needs to recursively unify tags, you can imagine a 2d array, every inner array 
+    // needs to be in the same AT. right now they are separate. Probably needs a similar
+    // trait-based approach, like BindToSite. (trait Trackable?)
     pub fn track_array<T, const N: usize>(array: [Tagged<T>; N]) -> Tagged<[Tagged<T>; N]> {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
         for i in 0..(N - 1) {
@@ -319,5 +381,15 @@ impl ATI {
     /// Produce output partition that defines abstract types.
     pub fn report(&mut self) {
         self.sites.report();
+    }
+
+    /// Produce output in .decls format.
+    // FIXME: would be nice to conditionally include either this or what is required for report() to function,
+    // no reason to include both in executable everytime
+    pub fn produce_decls(&mut self, output_file: &str) {
+        let cwd = std::env::current_dir().expect("Unable to determine current working directory.");
+        let file = cwd.join(output_file);
+        let file = std::fs::File::create(file).unwrap();
+        self.sites.produce_decls(file)
     }
 }

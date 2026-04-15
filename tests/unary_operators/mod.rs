@@ -5,17 +5,17 @@ use crate::common::{ExpectedOutput, ExpectedSite, compile_and_execute, delete, v
 #[test]
 fn unary_operators() {
     let mut expected = ExpectedOutput::new();
-    expected.register_site(ExpectedSite::new("main::ENTER"));
-    expected.register_site(ExpectedSite::new("main::EXIT"));
+    expected.register_site(ExpectedSite::new("main:::ENTER"));
+    expected.register_site(ExpectedSite::new("main:::EXIT"));
 
     expected.register_site(
-        ExpectedSite::new("negation::ENTER")
+        ExpectedSite::new("negation:::ENTER")
             .register("x", 0)
             .register("y", 1)
             .register("z", 2)
     );
     expected.register_site(
-        ExpectedSite::new("negation::EXIT")
+        ExpectedSite::new("negation:::EXIT")
             .register("x", 0)
             .register("y", 0)
             .register("z", 1)
@@ -23,13 +23,13 @@ fn unary_operators() {
     );
 
     expected.register_site(
-        ExpectedSite::new("boolean_not::ENTER")
+        ExpectedSite::new("boolean_not:::ENTER")
             .register("x", 0)
             .register("y", 1)
             .register("z", 2)
     );
     expected.register_site(
-        ExpectedSite::new("boolean_not::EXIT")
+        ExpectedSite::new("boolean_not:::EXIT")
             .register("x", 0)
             .register("y", 0)
             .register("z", 0)
@@ -37,13 +37,13 @@ fn unary_operators() {
     );
 
     expected.register_site(
-        ExpectedSite::new("dereference::ENTER")
+        ExpectedSite::new("dereference:::ENTER")
             .register("x", 0)
             .register("y", 1)
             .register("z", 2)
     );
     expected.register_site(
-        ExpectedSite::new("dereference::EXIT")
+        ExpectedSite::new("dereference:::EXIT")
             .register("x", 0)
             .register("y", 0)
             .register("z", 0)

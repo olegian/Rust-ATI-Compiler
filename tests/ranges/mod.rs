@@ -5,18 +5,18 @@ use crate::common::{ExpectedOutput, ExpectedSite, compile_and_execute, delete, v
 #[test]
 fn ranges() {
     let mut expected = ExpectedOutput::new();
-    expected.register_site(ExpectedSite::new("main::ENTER"));
-    expected.register_site(ExpectedSite::new("main::EXIT"));
+    expected.register_site(ExpectedSite::new("main:::ENTER"));
+    expected.register_site(ExpectedSite::new("main:::EXIT"));
     expected.register_site(
-        ExpectedSite::new("copy::ENTER")
-            .register_array("from", 5, 0, 1)
-            .register_array("to", 5, 2, 3)
+        ExpectedSite::new("copy:::ENTER")
+            .register_array("from", vec![5], 0, vec![1])
+            .register_array("to", vec![5], 2, vec![3])
             .register("unused", 4),
     );
     expected.register_site(
-        ExpectedSite::new("copy::EXIT")
-            .register_array("from", 5, 0, 1)
-            .register_array("to", 5, 0, 1)
+        ExpectedSite::new("copy:::EXIT")
+            .register_array("from", vec![5], 0, vec![1])
+            .register_array("to", vec![5], 0, vec![1])
             .register("unused", 4)
             // .register("RET", 9)
     );

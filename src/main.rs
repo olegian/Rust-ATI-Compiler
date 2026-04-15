@@ -24,36 +24,86 @@ extern crate rustc_span;
 
 use std::{env, sync::Arc};
 
+use crate::args::{ArgParser, ArgSpec};
 use crate::common::DatirConfig;
 
 // included so VsCode's rust-analyzer extension runs static analysis on the runtime library
 mod ati;
 
+mod args;
 mod callbacks;
 mod common;
 mod file_loaders;
 mod types;
 mod visitors;
 
-/// Entry-point, forwards all command-line arguments to rustc_driver
+/// Entry-point. Parses DATIR's own command-line options, then forwards just
+/// the source file path to each rustc compiler invocation.
 pub fn main() {
-    let mut args: Vec<_> = env::args().collect();
+    let program = env::args().next().unwrap_or_else(|| "datir".to_string());
+    let parser = ArgParser::new(
+        program.clone(),
+        "DATIR: dynamic abstract type inference for Rust",
+    )
+    .arg(ArgSpec::positional(
+        "file",
+        "FILE",
+        "Path to root source file to instrument",
+    ))
+    .arg(
+        ArgSpec::keyword(
+            "output",
+            "Location of produced executable with added instrumentation",
+        )
+        .short("-o")
+        .long("--output")
+        .value_name("PATH"),
+    )
+    .arg(
+        ArgSpec::flag(
+            "release",
+            "--release",
+            "Run in release mode, skipping debug logging, and creating .decls file",
+        )
+        .short("-r"),
+    )
+    .arg(
+        ArgSpec::flag(
+            "test",
+            "--test",
+            "Run in test mode, skipping debug logging, and using regular print ATI output",
+        )
+        .short("-r"),
+    );
 
-    // Use debug logging / outputs when invoked via `cargo run -- <root.rs>` for now.
-    // FIXME: improve this, I should figure out a better way of passing flags and having the behavior appropriately change
-    // it's hard as there are multiple compile invocations, all of which could take different flags
-    let config = if args.ends_with(&["TEST_INVOCATION".to_string()]) {
-        args.pop();
-        Arc::new(DatirConfig::release())
+    let args = parser.parse_env();
+
+
+    let file_path = args
+        .get_value("file")
+        .expect("parser guarantees `file` is present")
+        .to_string();
+
+
+    let config = if args.is_present("release") {
+        let output = std::path::Path::new(&file_path).with_extension("decls");
+        Arc::new(DatirConfig::release(output))
+    } else if args.is_present("test") {
+        Arc::new(DatirConfig::test())
     } else {
         Arc::new(DatirConfig::debug())
     };
 
+    let mut compiler_args = vec![program, file_path];
+    if let Some(output) = args.get_value("output") {
+        compiler_args.push(format!("-o{output}"))
+    }
+
     let mut gather_info = callbacks::gather_orig::GatherAtiInfo::new(config.clone());
-    rustc_driver::run_compiler(&args, &mut gather_info); // panics on compilation failure
+    rustc_driver::run_compiler(&compiler_args, &mut gather_info); // panics on compilation failure
     let first_pass = gather_info.into_first_pass_info();
 
     let mut cbs =
         callbacks::transform_ast::TransformAbstractSyntaxTreeCallbacks::new(first_pass, config);
-    rustc_driver::run_compiler(&args, &mut cbs);
+    rustc_driver::run_compiler(&compiler_args, &mut cbs);
 }

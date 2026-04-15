@@ -70,6 +70,7 @@ pub fn generate_stubs(
 
                 // create a function stub for this function, to be added to the crate later
                 stub_code.push(create_fn_stub(
+                    datir_config,
                     module_path,
                     &orig_name,
                     &new_name,
@@ -307,7 +308,7 @@ fn qualified_site_name(module_path: &str, name: &str) -> String {
     if module_path.is_empty() {
         name.to_string()
     } else {
-        format!("{module_path}::{name}")
+        format!("{module_path}.{name}")
     }
 }
 
@@ -397,6 +398,7 @@ fn create_param_binds<'a>(site_name: &str, params: impl Iterator<Item=&'a ast::P
 /// 
 /// Abstract Type information about the inputs and outputs is reported at these locations.
 fn create_fn_stub(
+    config: &DatirConfig,
     module_path: &str,
     fn_name: &str,
     inner_name: &str,
@@ -424,19 +426,25 @@ fn create_fn_stub(
     let exit_binds = create_param_binds("site_exit", all_params).join("\n");
 
     if fn_name == "main" {
-        // TODO: environment stuff for main
+        let report_fmt = if let Some(output_file_name) = &config.output_decls_format {
+            format!("produce_decls(\"{}\")", output_file_name.to_str().unwrap())
+        } else {
+            "report()".to_string()
+        };
+
+        // FIXME: environment stuff for main
         return format!(
             r#"
             pub fn main() {{
-                let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}::ENTER");
+                let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}:::ENTER");
                 ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
 
-                let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}::EXIT");
+                let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}:::EXIT");
                 ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
 
                 {inner_name}();
 
-                ATI_ANALYSIS.lock().unwrap().report();
+                ATI_ANALYSIS.lock().unwrap().{report_fmt};
             }}
         "#
         );
@@ -448,17 +456,17 @@ fn create_fn_stub(
             format!(
                 r#"
                 pub fn {fn_name}{generic_params}({declared}) -> {ret}{where_clause} {{
-                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}::ENTER");
+                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}:::ENTER");
                     {enter_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
 
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}::EXIT");
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}:::EXIT");
                     {exit_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
 
                     let res = {inner_name}({passed});
 
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}::EXIT");
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}:::EXIT");
                     res.bind(&mut site_exit, "RET");
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
 
@@ -471,17 +479,17 @@ fn create_fn_stub(
             format!(
                 r#"
                 pub fn {fn_name}{generic_params}({declared}){where_clause} {{
-                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}::ENTER");
+                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}:::ENTER");
                     {enter_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
 
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}::EXIT");
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}:::EXIT");
                     {exit_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
 
                     {inner_name}({passed});
 
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}::EXIT");
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{site_name}:::EXIT");
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
                 }}
             "#
@@ -501,7 +509,7 @@ fn create_method_stub(
     output: &ast::FnRetTy,
     generics: &ast::Generics,
 ) -> String {
-    let qualified_name = qualified_site_name(module_path, &format!("{type_name}::{method_name}"));
+    let qualified_name = qualified_site_name(module_path, &format!("{type_name}.{method_name}"));
     let generic_params = generic_params_to_string(generics);
     let where_clause = where_clause_to_string(generics);
 
@@ -576,17 +584,17 @@ fn create_method_stub(
             format!(
                 r#"
                 pub fn {method_name}{generic_params}({declared_params}) -> {ret}{where_clause} {{
-                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}::ENTER");
+                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}:::ENTER");
                     {enter_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
 
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}::EXIT");
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}:::EXIT");
                     {exit_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
 
                     let res = {call_expr};
 
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}::EXIT");
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}:::EXIT");
                     res.bind(&mut site_exit, "RET");
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
 
@@ -599,17 +607,17 @@ fn create_method_stub(
             format!(
                 r#"
                 pub fn {method_name}{generic_params}({declared_params}){where_clause} {{
-                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}::ENTER");
+                    let mut site_enter = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}:::ENTER");
                     {enter_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_enter);
 
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}::EXIT");
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}:::EXIT");
                     {exit_binds}
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
 
                     {call_expr};
 
-                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}::EXIT");
+                    let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site("{qualified_name}:::EXIT");
                     ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
                 }}
                 "#

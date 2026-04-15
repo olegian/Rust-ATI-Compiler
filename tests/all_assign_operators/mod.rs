@@ -5,8 +5,8 @@ use crate::common::{ExpectedOutput, ExpectedSite, compile_and_execute, delete, v
 #[test]
 fn assign_operators() {
     let mut expected = ExpectedOutput::new();
-    expected.register_site(ExpectedSite::new("main::ENTER"));
-    expected.register_site(ExpectedSite::new("main::EXIT"));
+    expected.register_site(ExpectedSite::new("main:::ENTER"));
+    expected.register_site(ExpectedSite::new("main:::EXIT"));
 
     register_arith_sites_for("addassign", &mut expected);
     register_arith_sites_for("subassign", &mut expected);
@@ -28,12 +28,12 @@ fn assign_operators() {
 }
 
 fn register_arith_sites_for(op_name: &str, expected: &mut ExpectedOutput) {
-    expected.register_site(ExpectedSite::new(&format!("{op_name}::ENTER"))
+    expected.register_site(ExpectedSite::new(&format!("{op_name}:::ENTER"))
         .register("x", 0)
         .register("y", 1)
         .register("z", 2));
 
-    expected.register_site(ExpectedSite::new(&format!("{op_name}::EXIT"))
+    expected.register_site(ExpectedSite::new(&format!("{op_name}:::EXIT"))
         .register("x", 0)
         .register("y", 0)
         .register("z", 1)
@@ -41,12 +41,12 @@ fn register_arith_sites_for(op_name: &str, expected: &mut ExpectedOutput) {
 }
 
 fn register_bitwise_sites_for(op_name: &str, expected: &mut ExpectedOutput) {
-    expected.register_site(ExpectedSite::new(&format!("{op_name}::ENTER"))
+    expected.register_site(ExpectedSite::new(&format!("{op_name}:::ENTER"))
         .register("x", 0)
         .register("y", 1)
         .register("z", 2));
 
-    expected.register_site(ExpectedSite::new(&format!("{op_name}::EXIT"))
+    expected.register_site(ExpectedSite::new(&format!("{op_name}:::EXIT"))
         .register("x", 0)
         .register("y", 1)
         .register("z", 2)

@@ -5,10 +5,10 @@ use crate::common::{ExpectedOutput, ExpectedSite, compile_and_execute, delete, v
 #[test]
 fn uses_struct() {
     let mut expected = ExpectedOutput::new();
-    expected.register_site(ExpectedSite::new("main::ENTER"));
-    expected.register_site(ExpectedSite::new("main::EXIT"));
+    expected.register_site(ExpectedSite::new("main:::ENTER"));
+    expected.register_site(ExpectedSite::new("main:::EXIT"));
     expected.register_site(
-        ExpectedSite::new("func::ENTER")
+        ExpectedSite::new("func:::ENTER")
             .register("x", 0)
             .register("y", 1)
             .register("z", 2)
@@ -19,7 +19,7 @@ fn uses_struct() {
             .register("s.z.y", 6),
     );
     expected.register_site(
-        ExpectedSite::new("func::EXIT")
+        ExpectedSite::new("func:::EXIT")
             .register("x", 0)
             .register("y", 0)
             .register("s.x", 0)

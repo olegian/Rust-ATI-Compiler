@@ -5,16 +5,16 @@ use crate::common::{ExpectedOutput, ExpectedSite, compile_and_execute, delete, v
 #[test]
 fn simple() {
     let mut expected = ExpectedOutput::new();
-    expected.register_site(ExpectedSite::new("main::ENTER"));
-    expected.register_site(ExpectedSite::new("main::EXIT"));
+    expected.register_site(ExpectedSite::new("main:::ENTER"));
+    expected.register_site(ExpectedSite::new("main:::EXIT"));
     expected.register_site(
-        ExpectedSite::new("foo::ENTER")
+        ExpectedSite::new("foo:::ENTER")
             .register("x", 0)
             .register("y", 1)
             .register("z", 2),
     );
     expected.register_site(
-        ExpectedSite::new("foo::EXIT")
+        ExpectedSite::new("foo:::EXIT")
             .register("x", 0)
             .register("y", 0)
             .register("z", 1)

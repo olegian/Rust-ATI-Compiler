@@ -1,3 +1,4 @@
+THIS FILE CONTAINS OUTDATED INFORMATION.
 The below details the exact algorithm that this repository uses to perform instrumentation.
 
 `TRACKED_PRIMS` $\leftarrow$ $\{$ "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128", "f16", "f32", "f64", "f128" $\}$

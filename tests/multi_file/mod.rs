@@ -6,42 +6,42 @@ use crate::common::{ExpectedOutput, ExpectedSite, compile_and_execute, delete, v
 #[test]
 fn multi_file() {
     let mut expected = ExpectedOutput::new();
-    expected.register_site(ExpectedSite::new("main::ENTER"));
-    expected.register_site(ExpectedSite::new("main::EXIT"));
+    expected.register_site(ExpectedSite::new("main:::ENTER"));
+    expected.register_site(ExpectedSite::new("main:::EXIT"));
     expected.register_site(
-        ExpectedSite::new("foo::ENTER")
+        ExpectedSite::new("foo:::ENTER")
             .register("x", 0)
             .register("y", 1)
             .register("unused", 2),
     );
     expected.register_site(
-        ExpectedSite::new("foo::EXIT")
+        ExpectedSite::new("foo:::EXIT")
             .register("x", 0)
             .register("y", 0)
             .register("unused", 1)
             .register("RET", 0),
     );
     expected.register_site(
-        ExpectedSite::new("dep::foo::ENTER")
+        ExpectedSite::new("dep.foo:::ENTER")
             .register("x", 0)
             .register("y", 1)
             .register("z", 2),
     );
     expected.register_site(
-        ExpectedSite::new("dep::foo::EXIT")
+        ExpectedSite::new("dep.foo:::EXIT")
             .register("x", 0)
             .register("y", 1)
             .register("z", 1)
             .register("RET", 1),
     );
     expected.register_site(
-        ExpectedSite::new("dep::foo0::ENTER")
+        ExpectedSite::new("dep.foo0:::ENTER")
             .register("x", 0)
             .register("y", 1)
             .register("z", 2),
     );
     expected.register_site(
-        ExpectedSite::new("dep::foo0::EXIT")
+        ExpectedSite::new("dep.foo0:::EXIT")
             .register("x", 0)
             .register("y", 0)
             .register("z", 1)
