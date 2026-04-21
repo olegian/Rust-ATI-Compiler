@@ -15,6 +15,9 @@ pub struct DatirConfig {
     /// Whether or not to print the information regarding function signatures used to create
     /// function stubs
     pub print_function_signatures: bool,
+    /// Set to true to have instrumented executable produce a .decls formatted file, as opposed to 
+    /// just printing the abstract type information for each value
+    pub output_decls_format: Option<std::path::PathBuf>,
 }
 
 impl DatirConfig {
@@ -32,16 +35,28 @@ impl DatirConfig {
             print_transformed_source: true,
             print_first_pass_info: true,
             print_function_signatures: true,
+            output_decls_format: None,
         }
     }
 
-    /// Simple configuration intended to be used for consumer use
-    pub fn release() -> Self {
+    pub fn test() -> Self {
         Self {
             log_dir: None,
             print_transformed_source: false,
             print_first_pass_info: false,
-            print_function_signatures: true,
+            print_function_signatures: false,
+            output_decls_format: None,
+        }
+    }
+
+    /// Simple configuration intended to be used for consumer use
+    pub fn release(decls_file_name: std::path::PathBuf) -> Self {
+        Self {
+            log_dir: None,
+            print_transformed_source: true,
+            print_first_pass_info: false,
+            print_function_signatures: false,
+            output_decls_format: Some(decls_file_name),
         }
     }
 

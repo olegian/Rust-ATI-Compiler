@@ -1,0 +1,11 @@
+1. 'static lifetimes could get broken
+        imagine a static reference to an array, will it maintain it's static status after an ATI::track_array/track_slice call??
+2. assigning to a tuple should merge together appropriate tags, recursively.
+        right now, it naively assumes the top level is untupleable
+3. constructing a subslice from a slice type
+        right now, only ([T; N])[range] is implemented, not ([T])[range]
+4. double check PEMDAS order of operations is correct when chaining binary ops
+5. does assignment really mean interaction? I've been considering it as a yes
+        as in if value v1 and v2 can both be assigned to the same variable, then v1 and v2 are in the same AT
+        consider unary_operators test, should dereference::x be in the same AT as y and z?
+        on the flip side, consider ranges::slice_and_modify. value assigned to one element of slice, which means entire slice tag should be merged with value tag??

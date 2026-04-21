@@ -59,17 +59,3 @@ impl CanBeTupled for Lit {
         }
     }
 }
-
-/// Removes references to get to the underlying type, as in `& &mut &T` is converted to `T`.
-// FIXME: this is equiv to Ty::peel_refs but just mutable rather than shared borrows
-// there has to be a better way!
-pub fn peel_refs(ty: &mut ast::Ty) -> &mut ast::Ty {
-    let mut final_ty = ty;
-    while let ast::TyKind::Ref(_, ast::MutTy { ref mut ty, .. })
-    | ast::TyKind::Ptr(ast::MutTy { ref mut ty, .. }) = final_ty.kind
-    {
-        final_ty = &mut **ty;
-    }
-
-    final_ty
-}

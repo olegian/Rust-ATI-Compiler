@@ -6,16 +6,16 @@ use crate::common::{ExpectedOutput, ExpectedSite, compile_and_execute, delete, v
 fn generic_struct() {
     let mut expected = ExpectedOutput::new();
 
-    expected.register_site(ExpectedSite::new("main::ENTER"));
-    expected.register_site(ExpectedSite::new("main::EXIT"));
+    expected.register_site(ExpectedSite::new("main:::ENTER"));
+    expected.register_site(ExpectedSite::new("main:::EXIT"));
 
     expected.register_site(
-        ExpectedSite::new("MyStruct::new::ENTER")
+        ExpectedSite::new("MyStruct.new:::ENTER")
             .register("val", 0)
             .register("unused", 1)
     );
     expected.register_site(
-        ExpectedSite::new("MyStruct::new::EXIT")
+        ExpectedSite::new("MyStruct.new:::EXIT")
             .register("val", 0)
             .register("unused", 1)
             .register("RET.val", 0)
@@ -23,13 +23,13 @@ fn generic_struct() {
     );
 
     expected.register_site(
-        ExpectedSite::new("MyStruct::foo::ENTER")
+        ExpectedSite::new("MyStruct.foo:::ENTER")
             .register("self.val", 0)
             .register("self.unused", 1)
             .register("val", 2)
     );
     expected.register_site(
-        ExpectedSite::new("MyStruct::foo::EXIT")
+        ExpectedSite::new("MyStruct.foo:::EXIT")
             .register("self.val", 0)
             .register("self.unused", 1)
             .register("val", 2)
@@ -37,14 +37,14 @@ fn generic_struct() {
     );
 
     expected.register_site(
-        ExpectedSite::new("foo::ENTER")
+        ExpectedSite::new("foo:::ENTER")
             .register("a.val", 0)
             .register("a.unused", 1)
             .register("b", 2)
             .register("unused", 3)
     );
     expected.register_site(
-        ExpectedSite::new("foo::EXIT")
+        ExpectedSite::new("foo:::EXIT")
             .register("a.val", 0)
             .register("a.unused", 1)
             .register("b", 2)

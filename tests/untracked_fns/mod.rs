@@ -5,10 +5,10 @@ use crate::common::{ExpectedOutput, ExpectedSite, compile_and_execute, delete, v
 #[test]
 fn untracked_fns() {
     let mut expected = ExpectedOutput::new();
-    expected.register_site(ExpectedSite::new("main::ENTER"));
-    expected.register_site(ExpectedSite::new("main::EXIT"));
+    expected.register_site(ExpectedSite::new("main:::ENTER"));
+    expected.register_site(ExpectedSite::new("main:::EXIT"));
     expected.register_site(
-        ExpectedSite::new("foo::ENTER")
+        ExpectedSite::new("foo:::ENTER")
             .register("a", 0)
             .register("b", 1)
             .register("c", 2)
@@ -16,7 +16,7 @@ fn untracked_fns() {
             .register("e", 4),
     );
     expected.register_site(
-        ExpectedSite::new("foo::EXIT")
+        ExpectedSite::new("foo:::EXIT")
             .register("a", 0)
             .register("b", 1)
             .register("c", 2)
@@ -25,12 +25,12 @@ fn untracked_fns() {
             .register("RET", 3),
     );
     expected.register_site(
-        ExpectedSite::new("max::ENTER")
+        ExpectedSite::new("max:::ENTER")
             .register("a", 0)
             .register("b", 1),
     );
     expected.register_site(
-        ExpectedSite::new("max::EXIT")
+        ExpectedSite::new("max:::EXIT")
             .register("a", 0)
             .register("b", 0)
             .register("RET", 0),

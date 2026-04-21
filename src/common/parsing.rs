@@ -82,6 +82,27 @@ pub fn parse_single_unstable_compiler_attribute(
         .expect("Attribute list has zero elements")
 }
 
+/// Parses a string `contents` as a sequence of statements. The source is
+/// wrapped as the body of a dummy block so the parser accepts bare statements.
+pub fn parse_stmts(psess: &ParseSess, contents: String) -> Vec<ast::Stmt> {
+    let wrapped = format!("{{ {contents} }}");
+    let mut parser = create_parser(psess, wrapped, None);
+    let expr = match parser.parse_expr() {
+        Ok(e) => *e,
+        Err(diag) => {
+            diag.emit();
+            panic!("Failed to parse stmts block");
+        }
+    };
+    match expr.kind {
+        ast::ExprKind::Block(block, _) => {
+            let block = *block;
+            block.stmts.into_iter().collect()
+        }
+        _ => panic!("Expected a block when parsing stmts"),
+    }
+}
+
 pub fn parse_crate(psess: &ParseSess, contents: String, file_path: Option<&Path>) -> ast::Crate {
     let mut parser = create_parser(psess, contents, file_path);
 

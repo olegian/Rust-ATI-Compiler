@@ -5,17 +5,17 @@ use crate::common::{ExpectedOutput, ExpectedSite, compile_and_execute, delete, v
 #[test]
 fn type_hints() {
     let mut expected = ExpectedOutput::new();
-    expected.register_site(ExpectedSite::new("main::ENTER"));
-    expected.register_site(ExpectedSite::new("main::EXIT"));
+    expected.register_site(ExpectedSite::new("main:::ENTER"));
+    expected.register_site(ExpectedSite::new("main:::EXIT"));
 
     expected.register_site(
-        ExpectedSite::new("struct_hints::ENTER")
+        ExpectedSite::new("struct_hints:::ENTER")
             .register("a", 0)
             .register("b", 1)
             .register("unused", 2),
     );
     expected.register_site(
-        ExpectedSite::new("struct_hints::EXIT")
+        ExpectedSite::new("struct_hints:::EXIT")
             .register("a", 0)
             .register("b", 1)
             .register("unused", 2)
@@ -24,13 +24,13 @@ fn type_hints() {
     );
 
     expected.register_site(
-        ExpectedSite::new("primitive_hints::ENTER")
+        ExpectedSite::new("primitive_hints:::ENTER")
             .register("a", 0)
             .register("b", 1)
             .register("unused", 2),
     );
     expected.register_site(
-        ExpectedSite::new("primitive_hints::EXIT")
+        ExpectedSite::new("primitive_hints:::EXIT")
             .register("a", 0)
             .register("b", 0)
             .register("unused", 2)
@@ -38,12 +38,12 @@ fn type_hints() {
     );
 
     expected.register_site(
-        ExpectedSite::new("turbofish_hints::ENTER")
+        ExpectedSite::new("turbofish_hints:::ENTER")
             .register("a", 0)
             .register("unused", 2),
     );
     expected.register_site(
-        ExpectedSite::new("turbofish_hints::EXIT")
+        ExpectedSite::new("turbofish_hints:::EXIT")
             .register("a", 0)
             .register("unused", 2)
             .register("RET", 0),

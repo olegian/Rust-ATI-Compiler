@@ -18,7 +18,10 @@
  *    to allow for more complicated dispatch patterns, based off the "most similar" type.
 */
 
-use crate::ati::tagged::{Id, Tagged, Tagger};
+// FIXME: this file definitiely has some dead code everywhere, and can probably be
+// refactored to remove some functions.
+
+use crate::ati::{collection::Collect, index::{TaggedSliceIndex, TaggedSliceable}, tagged::{Id, Tagged, TaggedRef, TaggedRefMut, Tagger}};
 
 /// Top-level global that owns all information about all value interactions
 /// and ATI site states.
@@ -103,11 +106,56 @@ impl Site {
         println!("{}", self.name);
         for (var, tag) in self.var_tags.iter() {
             let leader = self.type_uf.find(tag).unwrap();
-            println!("{var}:{leader:?}");
+            println!("{var} -> {leader:?}");
         }
         println!("---");
     }
+
+    /// Emits the variable blocks for this site in .decls format.
+    pub fn produce_decls(&mut self, output: &mut std::fs::File) {
+        use std::io::Write;
+
+        for (var, tag) in self.var_tags.iter() {
+            let Some(var) = collapse_array_indices(var) else {
+                continue;
+            };
+            let var = var.replace('\\', "\\\\").replace(' ', "\\_");
+            writeln!(output, "variable {}", var).unwrap();
+            writeln!(output, "  comparability {tag}").unwrap();
+        }
+    }
 }
+
+fn collapse_array_indices(name: &str) -> Option<String> {
+    if name.ends_with(']') {
+        let (base, rest) = name.split_once('[').unwrap();
+        // `rest` looks like `0]`, `0][0]`, `3][7]`, etc.
+        // Representative iff every bracketed index is `0`
+        let is_representative = rest.replace("0]", "").replace('[', "").is_empty();
+        return is_representative.then(|| format!("{base}[..]"));
+    }
+
+    if name.ends_with("_LEN") {
+        if name.contains('[') {
+            return None;
+        }
+        return Some(name.to_string());
+    }
+
+    Some(name.to_string())
+}
+
+// FIXME: this should really just be a stored value rather than something that is extracted
+fn ppt_type_from_name(name: &str) -> &'static str {
+    if name.ends_with(":::ENTER") {
+        "enter"
+    } else if name.ends_with(":::EXIT") {
+        "exit"
+    } else {
+        panic!("unsupported ppt-type in site name: {}", name)
+    }
+}
+
 /// Manages multiple Sites at once, to allow for analyzing multiple functions
 pub struct Sites {
     locs: std::collections::BTreeMap<String, Site>,
@@ -139,7 +187,21 @@ impl Sites {
     pub fn report(&mut self) {
         println!("===ATI-ANALYSIS-START===");
         for (_, site) in self.locs.iter_mut() {
+            
             site.report();
+        }
+    }
+
+    /// Emits a .decls file covering all sites.
+    pub fn produce_decls(&mut self, mut output: std::fs::File) {
+        use std::io::Write;
+
+        for (name, site) in self.locs.iter_mut() {
+            let pt_name = name.replace('\\', "\\\\").replace(' ', "\\_");
+            writeln!(output, "ppt {}", pt_name).unwrap();
+            writeln!(output, "ppt-type {}", ppt_type_from_name(name)).unwrap();
+            site.produce_decls(&mut output);
+            writeln!(output, "").unwrap();
         }
     }
 }
@@ -274,20 +336,142 @@ impl ATI {
         Tagged(id, value)
     }
 
-    pub fn track_array<T, const N: usize>(array: [Tagged<T>; N]) -> Tagged<[Tagged<T>; N]> {
+    /// Wraps a raw array into a `Tagged<[E; N]>` with a fresh wrapper id, and
+    /// unifies tags so all elements at every depth share an AT per depth. The
+    /// element type `E` is any `Trackable` — typically `Tagged<U>`, but arrays
+    /// of references (e.g. `[&a[..], &b[..], &c[..]]` → `[&Tagged<&[T]>; 3]`)
+    /// also satisfy this bound because we specialize `Trackable` for
+    /// `&Tagged<..>` and `&mut Tagged<..>` wrappers. Non-tracked elements fall
+    /// into the default impl that contributes no ids.
+    ///
+    /// Specializations walk through nested `Tagged<[..]>` and `Tagged<&[..]>`
+    /// elements so arbitrarily-nested arrays end up with: one AT per nesting
+    /// depth containing every element at that depth, plus one AT for the new
+    /// wrapper.
+    pub fn track_array<T: Collect, const N: usize>(array: [T; N]) -> Tagged<[T; N]> {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
-        for i in 0..(N - 1) {
-            ATI_ANALYSIS
-                .lock()
-                .unwrap()
-                .union_tags(&array[i], &array[i + 1]);
+
+        let mut ids_by_level: Vec<Vec<Id>> = Vec::new();
+        for i in 0..N {
+            array[i].collect_ids_by_level(&mut ids_by_level, 0);
+        }
+
+        let mut ati = ATI_ANALYSIS.lock().unwrap();
+        for level_ids in ids_by_level.iter() {
+            for i in 0..level_ids.len().saturating_sub(1) {
+                ati.value_uf.union_tags(&level_ids[i], &level_ids[i + 1]);
+            }
         }
 
         Tagged(id, array)
     }
 
-    pub fn track_slice<'a, T, const N: usize>(array: &'a Tagged<[T; N]>) -> Tagged<&'a [T]> {
-        Tagged(array.0, &array.1)
+    /// Borrow a tagged array as a `TaggedRef<[T]>`. Relies on `CoerceUnsized`
+    /// to convert `TaggedRef<[T; N]>` -> `TaggedRef<[T]>` at the return site.
+    pub fn track_slice<'a, T, const N: usize>(array: &'a Tagged<[T; N]>) -> TaggedRef<'a, [T]> {
+        TaggedRef(&array.0, &array.1)
+    }
+
+    /// Mutable borrow of a tagged array as a `TaggedRefMut<[T]>`. Splits the
+    /// `&mut Tagged<[T; N]>` into separate mutable borrows of the Id and array
+    /// fields, then relies on `CoerceUnsized` to unsize the array into a slice.
+    pub fn track_slice_mut<'a, T, const N: usize>(
+        array: &'a mut Tagged<[T; N]>,
+    ) -> TaggedRefMut<'a, [T]> {
+        TaggedRefMut(&mut array.0, &mut array.1)
+    }
+
+    /// Build a `TaggedRef<[T]>` viewing a subrange of `collection`. The
+    /// collection's own Id is reused for the subslice view — the UF merge
+    /// unifies the range and collection Id's leader, so any later tag
+    /// operations on either borrow see the same AT.
+    pub fn track_subslice<'a, T, S, R>(
+        collection: &'a S,
+        range: R,
+    ) -> TaggedRef<'a, [T]>
+    where
+        S: TaggedSliceable<'a, T> + 'a,
+        R: TaggedSliceIndex<T>,
+    {
+        let range_id = range.id();
+        let (collection_id, subslice) = collection.raw_subslice(range.into_raw());
+
+        ATI_ANALYSIS.lock().unwrap().union_and_get_id(collection_id, &range_id);
+        TaggedRef(collection_id, subslice)
+    }
+
+    /// Mutable-borrow counterpart of [`track_subslice`]. Because the Id borrow
+    /// is shared with the collection's own Id (see [`track_subslice`]), the
+    /// mutable subslice is handed an immutable borrow of the Id — downstream
+    /// operations that want to mutate the Id of the overall collection must go
+    /// through `ATI_ANALYSIS` rather than this borrow.
+    pub fn track_subslice_mut<'a, T, S, R>(
+        collection: &'a mut S,
+        range: R,
+    ) -> TaggedRefMut<'a, [T]>
+    where
+        S: TaggedSliceable<'a, T> + 'a,
+        R: TaggedSliceIndex<T>,
+    {
+        let range_id = range.id();
+        let (collection_id, subslice) = collection.raw_subslice_mut(range.into_raw());
+
+        ATI_ANALYSIS.lock().unwrap().union_and_get_id(collection_id, &range_id);
+        TaggedRefMut(collection_id, subslice)
+    }
+
+    pub fn track_range<T>(
+        start: Tagged<T>,
+        end: Tagged<T>,
+    ) -> Tagged<std::ops::Range<Tagged<T>>> {
+        let mut ati = ATI_ANALYSIS.lock().unwrap();
+        let id = ati.value_uf.make_set();
+        ati.value_uf.union_tags(&id, &start.0);
+        ati.value_uf.union_tags(&id, &end.0);
+        Tagged(id, std::ops::Range { start, end })
+    }
+
+    pub fn track_range_inclusive<T>(
+        start: Tagged<T>,
+        end: Tagged<T>,
+    ) -> Tagged<std::ops::RangeInclusive<Tagged<T>>> {
+        let mut ati = ATI_ANALYSIS.lock().unwrap();
+        let id = ati.value_uf.make_set();
+        ati.value_uf.union_tags(&id, &start.0);
+        ati.value_uf.union_tags(&id, &end.0);
+        Tagged(id, std::ops::RangeInclusive::new(start, end))
+    }
+
+    pub fn track_range_from<T>(
+        start: Tagged<T>,
+    ) -> Tagged<std::ops::RangeFrom<Tagged<T>>> {
+        let mut ati = ATI_ANALYSIS.lock().unwrap();
+        let id = ati.value_uf.make_set();
+        ati.value_uf.union_tags(&id, &start.0);
+        Tagged(id, std::ops::RangeFrom { start })
+    }
+
+    pub fn track_range_to<T>(
+        end: Tagged<T>,
+    ) -> Tagged<std::ops::RangeTo<Tagged<T>>> {
+        let mut ati = ATI_ANALYSIS.lock().unwrap();
+        let id = ati.value_uf.make_set();
+        ati.value_uf.union_tags(&id, &end.0);
+        Tagged(id, std::ops::RangeTo { end })
+    }
+
+    pub fn track_range_to_inclusive<T>(
+        end: Tagged<T>,
+    ) -> Tagged<std::ops::RangeToInclusive<Tagged<T>>> {
+        let mut ati = ATI_ANALYSIS.lock().unwrap();
+        let id = ati.value_uf.make_set();
+        ati.value_uf.union_tags(&id, &end.0);
+        Tagged(id, std::ops::RangeToInclusive { end })
+    }
+
+    pub fn track_range_full() -> Tagged<std::ops::RangeFull> {
+        let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
+        Tagged(id, std::ops::RangeFull)
     }
 
     /// Fetches a site, or creates it, with the given name.
@@ -319,5 +503,15 @@ impl ATI {
     /// Produce output partition that defines abstract types.
     pub fn report(&mut self) {
         self.sites.report();
+    }
+
+    /// Produce output in .decls format.
+    // FIXME: would be nice to conditionally include either this or what is required for report() to function,
+    // no reason to include both in executable everytime
+    pub fn produce_decls(&mut self, output_file: &str) {
+        let cwd = std::env::current_dir().expect("Unable to determine current working directory.");
+        let file = cwd.join(output_file);
+        let file = std::fs::File::create(file).unwrap();
+        self.sites.produce_decls(file)
     }
 }

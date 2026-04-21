@@ -12,7 +12,7 @@ use crate::common;
 
 /// `file` must be a path to a .rs file containing required struct defs,
 /// enum defs, and thier associated impl blocks, to be added to the target
-/// program. Also handles use statements!
+/// program. Also handles use statements (by removing them)!
 pub fn define_types_from_file(file: &std::path::Path, psess: &ParseSess, krate: &mut ast::Crate) {
     let code: String = std::fs::read_to_string(file).unwrap();
 
@@ -30,6 +30,7 @@ pub fn define_types_from_file(file: &std::path::Path, psess: &ParseSess, krate: 
     }
 }
 
+/// Adds a crate attribute tag (#![feature(...)]) to the crate.
 pub fn add_crate_attribute(attr: &str, psess: &ParseSess, krate: &mut ast::Crate) {
     let attr = common::parse_single_unstable_compiler_attribute(psess, attr.into(), None);
     krate.attrs.push(attr);
