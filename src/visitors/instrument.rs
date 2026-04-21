@@ -963,6 +963,7 @@ impl<'a> TransformVisitor<'a> {
             rustc_ast::TyKind::CVarArgs => panic!(),
             rustc_ast::TyKind::Dummy => panic!(),
             rustc_ast::TyKind::Err(_) => panic!(),
+            rustc_ast::TyKind::FieldOf(_, _, _) => panic!(),
         };
     }
 }

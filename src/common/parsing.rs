@@ -5,7 +5,7 @@
 use rustc_ast::{self as ast};
 use rustc_parse::lexer::StripTokens;
 use rustc_parse::new_parser_from_source_str;
-use rustc_parse::parser::ForceCollect;
+use rustc_parse::parser::{ForceCollect, AllowConstBlockItems};
 use rustc_session::parse::ParseSess;
 use rustc_span::{FileName, RealFileName};
 
@@ -39,7 +39,7 @@ pub fn parse_items(
 
     let mut res = Vec::new();
     loop {
-        match parser.parse_item(ForceCollect::No) {
+        match parser.parse_item(ForceCollect::No, AllowConstBlockItems::No) {
             Ok(Some(item)) => {
                 res.push(item);
             }
