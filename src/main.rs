@@ -100,7 +100,9 @@ pub fn main() {
         compiler_args.push(format!("-o{output}"));
     }
 
-    config.log("Config", format!("{:#?}", config));
+    if config.print_config {
+        config.log("Config", format!("{:#?}", config));
+    }
 
     // The gather compilation
     // panics on compilation failure, therefore by the time the instrument

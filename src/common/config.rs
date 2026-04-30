@@ -16,6 +16,8 @@ pub struct DatirConfig {
     /// Whether or not to print the information regarding function signatures used to create
     /// function stubs
     pub print_function_signatures: bool,
+    /// Whether or not to output the config after it is constructed.
+    pub print_config: bool,
     /// Directory to which to output .ati files. If None, instrumented binary will 
     /// print ATI related output to stdout.
     pub ati_output_dir: Option<std::path::PathBuf>,
@@ -38,6 +40,7 @@ impl DatirConfig {
             print_transformed_source: true,
             print_first_pass_info: true,
             print_function_signatures: true,
+            print_config: true,
             ati_output_dir: None,
             decls_file,
         }
@@ -49,6 +52,7 @@ impl DatirConfig {
             print_transformed_source: false,
             print_first_pass_info: false,
             print_function_signatures: false,
+            print_config: false,
             ati_output_dir: None,
             decls_file,
         }
@@ -61,6 +65,7 @@ impl DatirConfig {
             print_transformed_source: false,
             print_first_pass_info: false,
             print_function_signatures: false,
+            print_config: false,
             ati_output_dir: Some(ati_output_dir),
             decls_file
         }
