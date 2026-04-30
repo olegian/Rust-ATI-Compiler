@@ -79,8 +79,14 @@ pub fn main() {
 
     // Construct config based on mode.
     let config = if let Some(dir_path) = args.get_value("release") {
-        // FIXME: CLEAR AND CREATE DIR AT dir_path IF NECESSARY
-        let output = std::path::PathBuf::from(dir_path);
+        // remove stale files in output.
+        let raw = std::path::PathBuf::from(dir_path);
+        let _ = std::fs::remove_dir_all(&raw);
+        std::fs::create_dir_all(&raw)
+            .expect("Unable to create ATI output directory.");
+
+        let output = std::fs::canonicalize(&raw)
+            .expect("Unable to canonicalize ATI output directory.");
         DatirConfig::release(decls_file, output)
     } else if args.is_present("test") {
         DatirConfig::test(decls_file)

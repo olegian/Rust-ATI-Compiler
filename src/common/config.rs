@@ -58,7 +58,7 @@ impl DatirConfig {
     pub fn release(decls_file: decls_gen::DeclsFile, ati_output_dir: std::path::PathBuf) -> Self {
         Self {
             log_dir: None,
-            print_transformed_source: true,
+            print_transformed_source: false,
             print_first_pass_info: false,
             print_function_signatures: false,
             ati_output_dir: Some(ati_output_dir),

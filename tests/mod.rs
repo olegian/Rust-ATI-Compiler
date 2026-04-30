@@ -14,6 +14,7 @@ mod type_params;
 
 // test suite
 mod all_assign_operators;
+mod array_of_struct;
 mod all_binary_operators;
 mod array;
 mod array_high_dim;

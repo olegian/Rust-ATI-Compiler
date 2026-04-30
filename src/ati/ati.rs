@@ -123,33 +123,17 @@ impl Site {
         use std::io::Write;
 
         for (var, tag) in self.var_tags.iter() {
-            let Some(var) = collapse_array_indices(var) else {
-                continue;
-            };
+            // Do this in the merger. .ati files include all information for all
+            // vars. even nested arrays. We will then reconstrut [..] comp information
+            // by unioning the ATs of contained values.
+            // let Some(var) = collapse_array_indices(var) else {
+            //     continue;
+            // };
             let var = var.replace('\\', "\\\\").replace(' ', "\\_");
 
             writeln!(output, "var {} {}", var, tag).unwrap();
         }
     }
-}
-
-fn collapse_array_indices(name: &str) -> Option<String> {
-    if name.ends_with(']') {
-        let (base, rest) = name.split_once('[').unwrap();
-        // `rest` looks like `0]`, `0][0]`, `3][7]`, etc.
-        // Representative iff every bracketed index is `0`
-        let is_representative = rest.replace("0]", "").replace('[', "").is_empty();
-        return is_representative.then(|| format!("{base}[..]"));
-    }
-
-    if name.ends_with(".length") {
-        if name.contains('[') {
-            return None;
-        }
-        return Some(name.to_string());
-    }
-
-    Some(name.to_string())
 }
 
 // FIXME: this should really just be a stored value rather than something that is extracted
@@ -336,7 +320,7 @@ impl ATI {
     /// Moves a value from a standard type T to a Tagged<T>,
     /// assigning it a unique Id
     pub fn track<T>(value: T) -> Tagged<T>
-where {
+    where {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
         Tagged(id, value)
     }
@@ -351,17 +335,17 @@ where {
     pub fn track_array<T: Collect, const N: usize>(array: [T; N]) -> Tagged<[T; N]> {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
 
-        let mut ids_by_level: Vec<Vec<Id>> = Vec::new();
-        for i in 0..N {
-            array[i].collect_ids_by_level(&mut ids_by_level, 0);
-        }
+        // let mut ids_by_level: Vec<Vec<Id>> = Vec::new();
+        // for i in 0..N {
+        //     array[i].collect_ids_by_level(&mut ids_by_level, 0);
+        // }
 
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        for level_ids in ids_by_level.iter() {
-            for i in 0..level_ids.len().saturating_sub(1) {
-                ati.value_uf.union_tags(&level_ids[i], &level_ids[i + 1]);
-            }
-        }
+        // let mut ati = ATI_ANALYSIS.lock().unwrap();
+        // for level_ids in ids_by_level.iter() {
+        //     for i in 0..level_ids.len().saturating_sub(1) {
+        //         ati.value_uf.union_tags(&level_ids[i], &level_ids[i + 1]);
+        //     }
+        // }
 
         Tagged(id, array)
     }

@@ -26,7 +26,7 @@ fn generic_struct() {
         ExpectedSite::new(prefix_with_path_from_root(
             "generic_struct/main.rs::MyStruct::<A, B>::new:::EXIT",
         ))
-        .register("val", 0)
+        // .register("val", 0)  // dropped as genric is not ref or copy
         .register("unused", 1)
         .register("return.val", 0)
         .register("return.unused", 1),
@@ -46,7 +46,7 @@ fn generic_struct() {
         ))
         .register("self.val", 0)
         .register("self.unused", 1)
-        .register("val", 2)
+        // .register("val", 2) // dropped as generic is not ref or copy
         .register("return", 1),
     );
 
@@ -63,9 +63,9 @@ fn generic_struct() {
         ExpectedSite::new(prefix_with_path_from_root(
             "generic_struct/main.rs::foo:::EXIT",
         ))
-        .register("a.val", 0)
-        .register("a.unused", 1)
-        .register("b", 2)
+        // .register("a.val", 0)  // dropped
+        // .register("a.unused", 1)
+        // .register("b", 2)
         .register("unused", 3)
         .register("return.val", 0)
         .register("return.unused", 1),

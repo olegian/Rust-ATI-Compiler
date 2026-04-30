@@ -34,9 +34,9 @@ fn assign_tuples() {
         .register("a.0", 0)
         .register("a.1.0", 1)
         .register("a.2", 2)
-        .register("b.0", 0)
-        .register("b.1.0", 1)
-        .register("b.2", 2),
+        .register("b.0", 3)
+        .register("b.1.0", 4)
+        .register("b.2", 5),
     );
 
     expected.register_site(
@@ -58,9 +58,9 @@ fn assign_tuples() {
         .register("target.0", 0)
         .register("target.1", 1)
         .register("target.2", 2)
-        .register("value.0", 0)
+        .register("value.0", 3)
         .register("value.1", 1)
-        .register("value.2", 2)
+        .register("value.2", 5)
         .register("a", 1),
     );
 

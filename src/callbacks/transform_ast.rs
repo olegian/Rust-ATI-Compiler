@@ -101,6 +101,9 @@ impl rustc_driver::Callbacks for TransformAbstractSyntaxTreeCallbacks {
         add_crate_attribute("#![feature(step_trait)]", &compiler.sess.psess, krate);
         add_crate_attribute("#![feature(unsize)]", &compiler.sess.psess, krate);
         add_crate_attribute("#![feature(coerce_unsized)]", &compiler.sess.psess, krate);
+        // For the --release main wrapper: produces a random filename for
+        // the per-execution .ati output via std::random.
+        add_crate_attribute("#![feature(random)]", &compiler.sess.psess, krate);
 
         Compilation::Continue
     }

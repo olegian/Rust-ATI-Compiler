@@ -801,10 +801,21 @@ fn build_fn_wrapper_block(
     let exit_binds = create_param_binds("site_exit", inputs.iter(), exit_ppt).join("\n");
 
     if fn_name == "main" {
-        let report_fmt = if let Some(output_file_name) = &config.ati_output_dir {
-            format!("produce_decls(\"{}\")", output_file_name.to_str().unwrap())
-        } else {
-            "report()".to_string()
+        // In --release mode each execution produces a fresh .ati file at
+        // {ati_output_dir}/{rand:016x}.ati so concurrent or repeated runs
+        // don't clobber each other. The dir was wiped + canonicalized in
+        // datir's main.rs, so the path here is absolute. Outside release
+        // mode just dump the report to stdout via the existing API.
+        let post = match &config.ati_output_dir {
+            Some(dir) => format!(
+                r#"{{
+                    let __ati_rand: u64 = std::random::random(..);
+                    let __ati_path = format!(r"{}/{{:016x}}.ati", __ati_rand);
+                    ATI_ANALYSIS.lock().unwrap().produce_ati(&__ati_path);
+                }}"#,
+                dir.to_str().expect("ati_output_dir is not valid UTF-8"),
+            ),
+            None => "ATI_ANALYSIS.lock().unwrap().report();".to_string(),
         };
 
         return format!(
@@ -817,7 +828,7 @@ fn build_fn_wrapper_block(
                 let mut site_exit = ATI_ANALYSIS.lock().unwrap().get_site(r"{base_ppt_name}:::EXIT");
                 ATI_ANALYSIS.lock().unwrap().update_site(site_exit);
 
-                ATI_ANALYSIS.lock().unwrap().{report_fmt};
+                {post}
             }}"#
         );
     }

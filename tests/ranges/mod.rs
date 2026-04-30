@@ -66,9 +66,9 @@ fn ranges() {
         ExpectedSite::new(prefix_with_path_from_root(
             "ranges/main.rs::pass_range:::EXIT",
         ))
-        .register("range", 1)
-        .register("range.start", 1)
-        .register("range.end", 1)
+        // .register("range", 1)
+        // .register("range.start", 1)
+        // .register("range.end", 1)
         .register("unused", 2)
         .register("return", 1),
     );
@@ -86,9 +86,9 @@ fn ranges() {
         ExpectedSite::new(prefix_with_path_from_root(
             "ranges/main.rs::get_length:::EXIT",
         ))
-        .register("range", 1)
-        .register("range.start", 1)
-        .register("range.end", 1)
+        // .register("range", 1)
+        // .register("range.start", 1)
+        // .register("range.end", 1)
         .register("a", 1)
         .register("return", 1),
     );
@@ -105,9 +105,9 @@ fn ranges() {
         ExpectedSite::new(prefix_with_path_from_root(
             "ranges/main.rs::reverse_sum:::EXIT",
         ))
-        .register("range", 1)
-        .register("range.start", 1)
-        .register("range.end", 1)
+        // .register("range", 1)
+        // .register("range.start", 1)
+        // .register("range.end", 1)
         .register("return", 1),
     );
 
@@ -123,9 +123,10 @@ fn ranges() {
         ExpectedSite::new(prefix_with_path_from_root(
             "ranges/main.rs::count_elements:::EXIT",
         ))
-        .register("range", 1)
-        .register("range.start", 1)
-        .register("range.end", 1),
+        // captured by value
+        // .register("range", 1)
+        // .register("range.start", 1)
+        // .register("range.end", 1),
     );
 
     expected.register_site(
@@ -140,9 +141,10 @@ fn ranges() {
         ExpectedSite::new(prefix_with_path_from_root(
             "ranges/main.rs::fused_next:::EXIT",
         ))
-        .register("range", 1)
-        .register("range.start", 1)
-        .register("range.end", 1)
+        // captured by value
+        // .register("range", 1)
+        // .register("range.start", 1)
+        // .register("range.end", 1)
         .register("return", 1),
     );
 
@@ -162,16 +164,29 @@ fn ranges() {
         ExpectedSite::new(prefix_with_path_from_root(
             "ranges/main.rs::check_bounds:::EXIT",
         ))
-        .register("range", 1)
-        .register("range.start", 1)
-        .register("range.end", 1),
+        // by value:
+        // .register("range", 1)
+        // .register("range.start", 1)
+        // .register("range.end", 1),
     );
 
     expected.register_site(
         ExpectedSite::new(prefix_with_path_from_root(
             "ranges/main.rs::index_with_range:::ENTER",
         ))
-        .register_array("arr", vec![10], 0, vec![1])
+        // .register_array("arr", vec![10], 0, vec![1])
+        .register("arr.length", 1)
+        .register("arr[0]", 0)
+        .register("arr[1]", 0)
+        .register("arr[2]", 0)
+        .register("arr[3]", 0)
+        .register("arr[4]", 0)
+        .register("arr[5]", 0)
+        .register("arr[6]", 0)
+        .register("arr[7]", 0)
+        .register("arr[8]", 0)
+        .register("arr[9]", 0)
+
         .register("lo", 2)
         .register("hi", 3),
     );
@@ -179,17 +194,43 @@ fn ranges() {
         ExpectedSite::new(prefix_with_path_from_root(
             "ranges/main.rs::index_with_range:::EXIT",
         ))
-        .register_array("arr", vec![10], 0, vec![1])
+        .register("arr.length", 1)
+        .register("arr[0]", 0)
+        .register("arr[1]", 0)
+        .register("arr[2]", 0)
+        .register("arr[3]", 0)
+        .register("arr[4]", 0)
+        .register("arr[5]", 0)
+        .register("arr[6]", 0)
+        .register("arr[7]", 0)
+        .register("arr[8]", 0)
+        .register("arr[9]", 0)
         .register("lo", 1)
         .register("hi", 1)
-        .register_array("return", vec![4], 0, vec![1]),
+
+        // .register_array("return", vec![4], 0, vec![1]),
+        .register("return.length", 1)
+        .register("return[0]", 0)
+        .register("return[1]", 0)
+        .register("return[2]", 0)
+        .register("return[3]", 0)
     );
 
     expected.register_site(
         ExpectedSite::new(prefix_with_path_from_root(
             "ranges/main.rs::slice_and_modify:::ENTER",
         ))
-        .register_array("arr", vec![10], 0, vec![1])
+        .register("arr.length", 1)
+        .register("arr[0]", 0)
+        .register("arr[1]", 0)
+        .register("arr[2]", 0)
+        .register("arr[3]", 0)
+        .register("arr[4]", 0)
+        .register("arr[5]", 0)
+        .register("arr[6]", 0)
+        .register("arr[7]", 0)
+        .register("arr[8]", 0)
+        .register("arr[9]", 0)
         .register("range", 2)
         .register("range.start", 2)
         .register("range.end", 2)
@@ -199,12 +240,32 @@ fn ranges() {
         ExpectedSite::new(prefix_with_path_from_root(
             "ranges/main.rs::slice_and_modify:::EXIT",
         ))
-        .register_array("arr", vec![10], 0, vec![1])
-        .register("range", 1)
-        .register("range.start", 1)
-        .register("range.end", 1)
-        .register("value", 0)
-        .register_array("return", vec![10], 0, vec![1]), // should they all be in the same AT?
+        .register("arr.length", 1)
+        .register("arr[0]", 0)
+        .register("arr[1]", 0)
+        .register("arr[2]", 0)
+        .register("arr[3]", 0)
+        .register("arr[4]", 0)
+        .register("arr[5]", 0)
+        .register("arr[6]", 0)
+        .register("arr[7]", 0)
+        .register("arr[8]", 0)
+        .register("arr[9]", 0)
+        // .register("range", 1)
+        // .register("range.start", 1)
+        // .register("range.end", 1)
+        .register("value", 3)
+        .register("return.length", 1)
+        .register("return[0]", 3)
+        .register("return[1]", 3)
+        .register("return[2]", 3)
+        .register("return[3]", 3)
+        .register("return[4]", 3)
+        .register("return[5]", 10)
+        .register("return[6]", 10)
+        .register("return[7]", 10)
+        .register("return[8]", 10)
+        .register("return[9]", 10)
     );
 
     let executable = Path::new(file!()).parent().unwrap().join("ranges.out");

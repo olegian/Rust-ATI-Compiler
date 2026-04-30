@@ -3,7 +3,7 @@ fn main() {
     let y = 2;
     let z = 3;
     foo(x, y, z);
-    // foo(x, y, z);
+    foo(z, x, z);
 }
 
 fn foo(x: u32, y: u32, z: u32) -> u32 {

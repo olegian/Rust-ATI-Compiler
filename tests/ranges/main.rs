@@ -8,7 +8,8 @@ fn main() {
     reverse_sum(1..5);
     count_elements(1..5);
     fused_next(1..3);
-    check_bounds(1..5);
+    let a = 1..5;
+    check_bounds(a);
 
     let arr = &[1; 10];
     index_with_range(arr, 1, 5);

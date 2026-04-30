@@ -163,7 +163,7 @@ pub fn verify(mut ati_stdout: &str, expected_partition: &HashMap<String, HashMap
         for (var, actual_id) in site_ati_output.iter() {
             let expected_id = expected_site
                 .get(var)
-                .expect(&format!("Expected site does not have var: {var}"));
+                .expect(&format!("Expected site {site_name} does not include observed var: {var}"));
             if let Some(prev_actual_id) = expected_to_actual.get(expected_id) {
                 assert_eq!(
                     **prev_actual_id, *actual_id,
@@ -206,7 +206,7 @@ impl ExpectedSite {
         self
     }
 
-    pub fn register_array(
+    pub fn register_array_old(
         mut self,
         name: &str,
         mut dims: Vec<usize>,
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn test_array_site() {
         let site = ExpectedSite::new(prefix_with_path_from_root("common/main.rs::test::site"))
-            .register_array("arr", vec![3, 4, 5], 0, vec![1, 2, 3]);
+            .register_array_old("arr", vec![3, 4, 5], 0, vec![1, 2, 3]);
 
         println!("{:#?}", site.build());
     }
