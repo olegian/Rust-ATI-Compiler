@@ -104,7 +104,7 @@ fn generate_stubs_in_mod(
 
                 // find the name of the base program point name, discovered in the first pass
                 let entry = first_pass
-                    .lookup_free_fn(mod_path, ident.name)
+                    .lookup_free_fn(mod_path, ident.as_str())
                     .unwrap_or_else(|| {
                         panic!(
                             "stub generation could not find a FnEntry for free fn \
@@ -252,7 +252,7 @@ fn generate_stubs_in_mod(
                     }
 
                     let entry = first_pass
-                        .lookup_method(mod_path, &type_key, ident.name)
+                        .lookup_method(mod_path, &type_key, ident.as_str())
                         .unwrap_or_else(|| {
                             panic!(
                                 "stub generation could not find a FnEntry for method \

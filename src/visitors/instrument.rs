@@ -92,6 +92,27 @@ impl<'a> MutVisitor for TransformVisitor<'a> {
                     return;
                 }
             }
+            // Compound assignment through a TaggedRefMut (`*lhs OP= rhs`).
+            // Plain DerefMut would only update the value field and leave the
+            // id stale, so rewrite to read the current Tagged via field
+            // projection, apply the binary form of the op, then write both
+            // id and value back through .assign().
+            if let ast::ExprKind::AssignOp(op, lhs, rhs) = &mut expr.kind {
+                if let ast::ExprKind::Unary(ast::UnOp::Deref, inner) = &mut lhs.kind {
+                    mut_visit::walk_expr(self, inner);
+                    mut_visit::walk_expr(self, rhs);
+
+                    let bin_op: ast::BinOpKind = op.node.into();
+                    let code = format!(
+                        "{{ let mut __ati_lhs = {}; __ati_lhs.assign(Tagged(*__ati_lhs.0, *__ati_lhs.1) {} {}); }}",
+                        pprust::expr_to_string(inner),
+                        bin_op.as_str(),
+                        pprust::expr_to_string(rhs),
+                    );
+                    *expr = common::parse_expr(self.psess, code);
+                    return;
+                }
+            }
         }
 
         mut_visit::walk_expr(self, expr);
@@ -197,12 +218,18 @@ impl<'a> MutVisitor for TransformVisitor<'a> {
 
             // After Binary transformation, comparison conditions produce Tagged<bool>.
             // Unwrap to raw bool so the if/while condition compiles.
-            ast::ExprKind::If(cond, _, _) => {
-                *cond = self.untuple(cond.clone());
-            }
-
-            ast::ExprKind::While(cond, _, _) => {
-                *cond = self.untuple(cond.clone());
+            //
+            // Skip the untuple when the condition is `if let` / `while let`:
+            // `let PAT = EXPR` is pattern-match syntax, not an expression with a
+            // tupleable value, and Rust only permits raw `let` directly inside the
+            // if/while head — wrapping it as `(let ...).1` is a syntax error. The
+            // bound inner values still carry their tags after destructuring, so the
+            // tracking is preserved without any rewrite at this level. (Mixed
+            // let-chains like `if a && let Some(x) = b` aren't handled here.)
+            ast::ExprKind::If(cond, _, _) | ast::ExprKind::While(cond, _, _) => {
+                if !matches!(cond.kind, ast::ExprKind::Let(..)) {
+                    *cond = self.untuple(cond.clone());
+                }
             }
 
             // Unary * on an instrumented &T/&mut T with tupleable T.
@@ -269,7 +296,7 @@ impl<'a> MutVisitor for TransformVisitor<'a> {
                 // Skip free fns that pass 1 didn't observe
                 if self
                     .first_pass
-                    .lookup_free_fn(&self.current_mod_path, ident.name)
+                    .lookup_free_fn(&self.current_mod_path, ident.as_str())
                     .is_none()
                 {
                     return;
@@ -366,7 +393,7 @@ impl<'a> MutVisitor for TransformVisitor<'a> {
                     // skip methods pass 1 didn't observe
                     if self
                         .first_pass
-                        .lookup_method(&self.current_mod_path, &type_key, ident.name)
+                        .lookup_method(&self.current_mod_path, &type_key, ident.as_str())
                         .is_none()
                     {
                         continue;

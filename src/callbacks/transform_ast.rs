@@ -76,11 +76,6 @@ impl rustc_driver::Callbacks for TransformAbstractSyntaxTreeCallbacks {
     ) -> Compilation {
         let cwd = std::env::current_dir().unwrap();
         define_types_from_file(
-            &cwd.join("src/ati/collection.rs"),
-            &compiler.sess.psess,
-            krate,
-        );
-        define_types_from_file(
             &cwd.join("src/ati/tagged_ops.rs"),
             &compiler.sess.psess,
             krate,
@@ -91,6 +86,7 @@ impl rustc_driver::Callbacks for TransformAbstractSyntaxTreeCallbacks {
             krate,
         );
         define_types_from_file(&cwd.join("src/ati/index.rs"), &compiler.sess.psess, krate);
+        define_types_from_file(&cwd.join("src/ati/iterators.rs"), &compiler.sess.psess, krate);
         define_types_from_file(&cwd.join("src/ati/tagged.rs"), &compiler.sess.psess, krate);
         define_types_from_file(&cwd.join("src/ati/ati.rs"), &compiler.sess.psess, krate);
         add_crate_attribute(

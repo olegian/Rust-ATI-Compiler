@@ -18,7 +18,7 @@ use std::collections::{HashMap, HashSet};
 
 use rustc_hir::def_id::DefId;
 use rustc_middle as mir;
-use rustc_span::{Ident, Span, Symbol};
+use rustc_span::{Ident, Span};
 
 use crate::common::CanBeTupled;
 
@@ -27,9 +27,9 @@ use crate::common::CanBeTupled;
 pub type ModPath = String;
 
 /// Namespace key for an impl-method's enclosing impl block. Distinguishes
-/// inherent impls from trait impls so that `impl Foo { fn bar() }` and
-/// `impl SomeTrait for Foo { fn bar() }` don't collide in the
-/// `(mod_path, type_key, method_ident)` slot in FirstPassInfo.
+/// inherent impls from trait impls so that impl Foo { fn bar() } and
+/// impl SomeTrait for Foo { fn bar() } don't collide in the
+/// (mod_path, type_key, method_ident) slot in FirstPassInfo.
 ///
 /// Both paths are stored as fully qualified paths.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -82,13 +82,16 @@ pub struct FnEntry {
 
 /// All instrumented fns defined in a single module, partitioned by their
 /// namespace (free fn vs. method on a type).
+///
+/// It's important to use Strings rather than any kind of Symbol (or anything
+/// that is compile-session dependant) as this needs to be stable between
+/// the two compilation passes
 #[derive(Debug, Default)]
 pub struct ModEntry {
-    /// Free functions in this module, keyed by fn ident
-    pub free_fns: HashMap<Symbol, FnEntry>,
-    /// Methods, keyed by `TypeKey` (head ident of the impl's self-type) and
-    /// then by method-ident `Symbol`.
-    pub methods: HashMap<TypeKey, HashMap<Symbol, FnEntry>>,
+    /// Free functions in this module, keyed by fn name.
+    pub free_fns: HashMap<String, FnEntry>,
+    /// Methods, keyed by `TypeKey` and then by method name.
+    pub methods: HashMap<TypeKey, HashMap<String, FnEntry>>,
 }
 
 /// Contains all information that is going to be passed between the
@@ -148,17 +151,18 @@ impl FirstPassInfo {
             base_ppt_name,
         };
 
+        let key = ident.as_str().to_string();
         let mod_entry = self.mods.entry(mod_path).or_default();
         match type_key {
             None => {
-                mod_entry.free_fns.insert(ident.name, entry);
+                mod_entry.free_fns.insert(key, entry);
             }
             Some(tk) => {
                 mod_entry
                     .methods
                     .entry(tk)
                     .or_default()
-                    .insert(ident.name, entry);
+                    .insert(key, entry);
             }
         }
 
@@ -215,9 +219,9 @@ impl FirstPassInfo {
     }
 
     /// Look up the recorded `FnEntry` for a free fn in module `mod_path` with
-    /// ident-symbol `ident`
-    pub fn lookup_free_fn(&self, mod_path: &str, ident: Symbol) -> Option<&FnEntry> {
-        self.mods.get(mod_path)?.free_fns.get(&ident)
+    /// name `ident`
+    pub fn lookup_free_fn(&self, mod_path: &str, ident: &str) -> Option<&FnEntry> {
+        self.mods.get(mod_path)?.free_fns.get(ident)
     }
 
     /// Look up the recorded `FnEntry` for a method in module `mod_path` on
@@ -226,9 +230,9 @@ impl FirstPassInfo {
         &self,
         mod_path: &str,
         type_key: &TypeKey,
-        ident: Symbol,
+        ident: &str,
     ) -> Option<&FnEntry> {
-        self.mods.get(mod_path)?.methods.get(type_key)?.get(&ident)
+        self.mods.get(mod_path)?.methods.get(type_key)?.get(ident)
     }
 
     /// Set of fn/method names defined in a particular `(mod_path, namespace)`
@@ -238,11 +242,11 @@ impl FirstPassInfo {
             return HashSet::new();
         };
         match type_key {
-            None => mod_entry.free_fns.keys().map(|s| s.to_string()).collect(),
+            None => mod_entry.free_fns.keys().cloned().collect(),
             Some(tk) => mod_entry
                 .methods
                 .get(tk)
-                .map(|m| m.keys().map(|s| s.to_string()).collect())
+                .map(|m| m.keys().cloned().collect())
                 .unwrap_or_default(),
         }
     }

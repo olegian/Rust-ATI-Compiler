@@ -37,6 +37,7 @@ mod untracked_fns;
 mod uses_enum;
 mod uses_methods;
 mod uses_struct;
+mod iterate_array;
 
 // FIXME: It's kind of annoying that `cargo test` ends up showing this
 // file in the output, but I honestly didn't like any of the quick solutions

@@ -21,11 +21,7 @@
 // FIXME: this file definitiely has some dead code everywhere, and can probably be
 // refactored to remove some functions.
 
-use crate::ati::{
-    collection::Collect,
-    index::TaggedSliceIndex,
-    tagged::{Id, Tagged, TaggedRef, TaggedRefMut, Tagger},
-};
+use crate::ati::tagged::{Id, Tagged, TaggedRef, TaggedRefMut, Tagger};
 
 /// Top-level global that owns all information about all value interactions
 /// and ATI site states.
@@ -320,33 +316,17 @@ impl ATI {
     /// Moves a value from a standard type T to a Tagged<T>,
     /// assigning it a unique Id
     pub fn track<T>(value: T) -> Tagged<T>
-    where {
+where {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
         Tagged(id, value)
     }
 
-    // FIXME: currnetl array/slice tracking is fucked up.
     /// Wraps a raw array into a `Tagged<[E; N]>` with a fresh wrapper id corresponding
-    /// to the length. Note, the elements are NOT unified at this time, 
+    /// to the length. Note, the elements are NOT unified at this time,
     /// as just being a part of the same array does not mean the elements
-    /// are intereacting together -- that's just in essense an assignment.
-    /// During the site update however, all tags will be merged within the type_uf,
-    /// meaning the array variable will hold elements of the same abstract type.
-    pub fn track_array<T: Collect, const N: usize>(array: [T; N]) -> Tagged<[T; N]> {
+    /// are intereacting together
+    pub fn track_array<T, const N: usize>(array: [T; N]) -> Tagged<[T; N]> {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
-
-        // let mut ids_by_level: Vec<Vec<Id>> = Vec::new();
-        // for i in 0..N {
-        //     array[i].collect_ids_by_level(&mut ids_by_level, 0);
-        // }
-
-        // let mut ati = ATI_ANALYSIS.lock().unwrap();
-        // for level_ids in ids_by_level.iter() {
-        //     for i in 0..level_ids.len().saturating_sub(1) {
-        //         ati.value_uf.union_tags(&level_ids[i], &level_ids[i + 1]);
-        //     }
-        // }
-
         Tagged(id, array)
     }
 

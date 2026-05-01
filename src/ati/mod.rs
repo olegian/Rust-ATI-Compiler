@@ -2,8 +2,8 @@
 // rust-analyzer fails to run for that file.
 // Adding this just to make the dev experience better.
 pub mod ati;
-pub mod collection;
 pub mod index;
+pub mod iterators;
 pub mod site_binds;
 pub mod tagged;
 pub mod tagged_ops;
