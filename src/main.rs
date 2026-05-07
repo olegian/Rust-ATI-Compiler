@@ -54,7 +54,7 @@ extern crate rustc_span;
 extern crate smallvec;
 extern crate thin_vec;
 
-use crate::common::DatirConfig;
+use crate::config::DatirConfig;
 use decls_gen::DeclsFile;
 
 // include so VsCode's rust-analyzer extension runs static analysis on the runtime library
@@ -62,11 +62,8 @@ use decls_gen::DeclsFile;
 
 mod args;
 mod callbacks;
-mod codegen;
-mod common;
+mod config;
 mod file_loader;
-mod gather;
-mod instrument;
 
 /// Errors produced by [`run`].
 #[derive(Debug)]
@@ -85,7 +82,7 @@ impl std::fmt::Display for DatirError {
 /// Executes DATIR end-to-end: runs both compiler passes against `target`,
 /// producing an instrumented binary at `output` (or rustc's default location
 /// if `None`). Use this entrypoint to invoke DATIR programmatically.
-pub fn run(
+fn run(
     config: DatirConfig,
     target: &std::path::Path,
     output: Option<&std::path::Path>,
@@ -115,12 +112,12 @@ pub fn run(
     // panics on compilation failure, therefore by the time the instrument
     // compilation starts, we know we are working with a semantically correct rust program
     let config = std::sync::Arc::new(config);
-    let mut gather_info = callbacks::gather_orig::GatherAtiInfo::new(config.clone());
+    let mut gather_info = callbacks::gather::GatherAtiInfo::new(config.clone());
     rustc_driver::run_compiler(&rustc_args, &mut gather_info);
     let first_pass = gather_info.into_first_pass_info();
 
     // The instrument compilation
-    let mut cbs = callbacks::transform_ast::TransformAbstractSyntaxTreeCallbacks::new(
+    let mut cbs = callbacks::instrument::TransformAbstractSyntaxTreeCallbacks::new(
         first_pass,
         config.clone(),
     );
@@ -131,7 +128,7 @@ pub fn run(
 
 /// Parses DATIR's command-line options into the
 /// inputs that [`run`] expects, then delegates.
-pub fn main() {
+fn main() {
     // this is mostly a placeholder string, for printing a nice usage message.
     let program = std::env::args()
         .next()

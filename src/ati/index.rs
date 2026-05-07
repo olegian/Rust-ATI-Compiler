@@ -1,3 +1,21 @@
+/// Provides implementations of standard libary traits that allow for indexing into 
+/// Tagged arrays and slices.
+/// 
+/// Indexing into an array or slice merges together the index Id with the collections length Id,
+/// as the out of bounds check is considered an interaction.
+/// 
+/// Further, as arrays and slices can be accessed via range indexes, and the SliceIndex trait
+/// is sealed within the compiler, we are unable to directly implement it to make range indexing
+/// work out of the box. Defined within this file are `.subslice` functions, which allow us to
+/// rewrite
+/// ```rust
+/// let x = &arr[a..b];
+/// ```
+/// into something that looks like:
+/// ```rust
+/// let x = arr.subslice(a..b);
+/// ```
+
 use crate::ati::{
     ati::ATI_ANALYSIS,
     tagged::{

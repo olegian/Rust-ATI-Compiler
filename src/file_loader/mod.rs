@@ -3,7 +3,7 @@
 //!
 //! To utilize the [`TransformingFileLoader`], construct it with a collection of [`Passes`] to
 //! which operate over the AST of each loaded file, then assign it to `config.file_loader` within
-//! the `config` callback. See [crate::callbacks::transform_ast] for an example.
+//! the `config` callback. See [crate::callbacks::instrument] for an example.
 //!
 //! The `after_crate_root_parsing` callback is the only one provided by rustc within which
 //! AST modification is usually possible. This callback provides a mutable reference to the
@@ -36,7 +36,8 @@
 mod files;
 mod transforming_passes;
 
-use crate::common::{self, DatirConfig};
+use crate::callbacks::parsing;
+use crate::config::DatirConfig;
 use files::{FileContents, FileType};
 pub use transforming_passes::Passes;
 
@@ -106,7 +107,7 @@ impl TransformingFileLoader {
     /// modified AST back into a source string representation.
     fn transform_source(&self, file: FileContents, path: &std::path::Path) -> String {
         let psess = rustc_session::parse::ParseSess::new();
-        let mut krate = common::parse_crate(&psess, file.source, Some(path));
+        let mut krate = parsing::parse_crate(&psess, file.source, Some(path));
         if self.config.print_original_ast {
             self.config.log(
                 "OriginalAst",

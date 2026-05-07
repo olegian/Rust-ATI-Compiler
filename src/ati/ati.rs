@@ -1,24 +1,21 @@
-/* Defines all types used to perform dynamic ATI. Every type in this file
- * is also defined in the instrumented code by `define_types.rs`.
- *
- * Key points include:
- * 1. `struct ATI` - A single global instance of this struct exists in the program
- *    accessible everywhere within the instrumented files, which holds the value_uf
- *    UnionFind (tracking all value interaction, globally) alongside the actual
- *    abstract type partition at each site. All interactions with ATI instrumentation
- *    are done by calling methods associated with this struct.
- * 2. `struct Site` - A program point, created in stubs, which stores the abstract
- *    types of variables registered to it.
- * 3. `struct Sites` - Maintains a collection of program points, all the sites in the
- *    instrumented file.
- * 4. `struct UnionFind` - A simple union find data structure, with some classic rank
- *    optimization.
- * 5. `trait BindToSite` - A trait which simplifies how values are associated with specific
- *    sites within each function stub. This trait uses an unstable feature called specialization
- *    to allow for more complicated dispatch patterns, based off the "most similar" type.
-*/
+/// Defines all types used to perform dynamic ATI. 
+/// 
+/// Every type in this file is injected into the instrumented code by `codegen/define_types.rs`.
+///
+/// Key points include:
+/// 1. `struct ATI` - A single global instance of this struct exists in the program
+///    accessible everywhere within the instrumented files, which holds the value_uf
+///    UnionFind (tracking all value interaction, globally) alongside the actual
+///    abstract type partition at each site. All interactions with ATI instrumentation
+///    are done by calling methods associated with this struct.
+/// 2. `struct Site` - A program point, created in stubs, which stores the abstract
+///    types of variables registered to it.
+/// 3. `struct Sites` - Maintains a collection of program points, all the sites in the
+///    instrumented file.
+/// 4. `struct UnionFind` - A simple union find data structure, with some classic rank
+///    optimization.
 
-// FIXME: this file definitiely has some dead code everywhere, and can probably be
+// FIXME: this file definitiely has some dead code somewhere, and can probably be
 // refactored to remove some functions.
 
 use crate::ati::tagged::{Id, Tagged, TaggedRef, TaggedRefMut, Tagger};
