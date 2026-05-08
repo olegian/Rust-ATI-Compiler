@@ -12,7 +12,7 @@
 //! partition).
 //!
 //! [Site] is a program point created by the shims emitted by
-//! `crate::callbacks::codegen::function`. Each site records which tagged values were bound
+//! `crate::callbacks::codegen`. Each site records which tagged values were bound
 //! to which variable name, and at the end of analysis emits the partition over those
 //! variables. [Sites] owns the collection of every program point seen during analysis.
 //!
