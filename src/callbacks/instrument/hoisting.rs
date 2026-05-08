@@ -10,7 +10,7 @@
 //! a temporary is created before being passed to an ATI library function, and create multiple
 //! statements out of the one, binding each temporary to a variable with a unique name.
 
-use crate::{callbacks::instrument::instrument::InstrumentingVisitor, callbacks::parsing};
+use crate::{callbacks::instrument::instrument_visitor::InstrumentingVisitor, callbacks::parsing};
 
 /// Hoist any method invocations to ATI library functions within this statement
 /// by creating temporary let-bindings.

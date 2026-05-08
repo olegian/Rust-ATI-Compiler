@@ -2,7 +2,7 @@
 //!
 //! Currently, unused.
 
-use crate::callbacks::instrument::instrument::InstrumentingVisitor;
+use crate::callbacks::instrument::instrument_visitor::InstrumentingVisitor;
 
 /// Invoked whenever the visitor runs into a ExprKind::Index.
 ///

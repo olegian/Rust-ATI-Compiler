@@ -39,7 +39,7 @@ pub fn untuple(expr: &mut rustc_ast::Expr) {
 /// emitted args, etc.) doesn't invalidate the original source binding.
 /// `TaggedRefMut` is move-only.
 pub fn reborrow_if_ref_mut(
-    visitor: &crate::callbacks::instrument::instrument::InstrumentingVisitor,
+    visitor: &crate::callbacks::instrument::instrument_visitor::InstrumentingVisitor,
     expr: &mut rustc_ast::Expr,
 ) {
     if !visitor

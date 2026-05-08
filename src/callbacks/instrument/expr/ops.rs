@@ -24,7 +24,7 @@ use rustc_ast::BinOpKind;
 use rustc_ast_pretty::pprust;
 
 use crate::{
-    callbacks::instrument::{expr::common as expr_common, instrument::InstrumentingVisitor},
+    callbacks::instrument::{expr::common as expr_common, instrument_visitor::InstrumentingVisitor},
     callbacks::parsing,
 };
 

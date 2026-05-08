@@ -6,7 +6,7 @@
 //! The Path which identifies the function being invoked could also have generic types within
 //! it, which require tupleing as well.
 
-use crate::callbacks::instrument::{expr::common, instrument::InstrumentingVisitor, types};
+use crate::callbacks::instrument::{expr::common, instrument_visitor::InstrumentingVisitor, types};
 
 /// Invoked whenever the visitor runs into a ExprKind::Call.
 ///

@@ -9,7 +9,7 @@
 //! then use the runtime library's `.as_tagged_ref()` / `.as_tagged_ref_mut()` methods to convert
 //! the `Tagged<T>` into a `TaggedRef<T>` / `TaggedRefMut<T>`.
 
-use crate::{callbacks::instrument::instrument::InstrumentingVisitor, callbacks::parsing};
+use crate::{callbacks::instrument::instrument_visitor::InstrumentingVisitor, callbacks::parsing};
 
 /// Invoked whenever the visitor runs into an `ExprKind::AddrOf`.
 pub fn transform_addr_of(visitor: &mut InstrumentingVisitor, addr_of_expr: &mut rustc_ast::Expr) {

@@ -6,7 +6,7 @@
 
 use rustc_ast_pretty::pprust;
 
-use crate::{callbacks::instrument::instrument::InstrumentingVisitor, callbacks::parsing};
+use crate::{callbacks::instrument::instrument_visitor::InstrumentingVisitor, callbacks::parsing};
 
 /// Invoked whenever the visitor runs into a ExprKind::Assign.
 ///

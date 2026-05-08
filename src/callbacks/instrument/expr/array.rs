@@ -3,7 +3,7 @@
 //! This expression requires utilizing the runtime library's `ATI::track(<array>)` function,
 //! to assign the length a dynamic Id.
 
-use crate::callbacks::instrument::{expr::common, instrument::InstrumentingVisitor};
+use crate::callbacks::instrument::{expr::common, instrument_visitor::InstrumentingVisitor};
 
 /// Invoked whenever the visitor runs into a ExprKind::Array
 /// or ExprKind::Repeat. In this case, we have already transformed

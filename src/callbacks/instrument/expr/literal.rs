@@ -6,7 +6,7 @@
 use rustc_ast_pretty::pprust;
 
 use crate::{
-    callbacks::instrument::{expr::common, instrument::InstrumentingVisitor},
+    callbacks::instrument::{expr::common, instrument_visitor::InstrumentingVisitor},
     callbacks::types::CanBeTupled,
 };
 

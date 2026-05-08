@@ -26,7 +26,7 @@
 mod expr;
 mod file_loader;
 mod hoisting;
-mod instrument;
+mod instrument_visitor;
 mod item;
 mod types;
 
@@ -34,7 +34,7 @@ use crate::{
     callbacks::codegen::{self, define_types},
     callbacks::gather::first_pass_info::FirstPassInfo,
     callbacks::instrument::file_loader::{Passes, TransformingFileLoader},
-    callbacks::instrument::instrument::InstrumentingVisitor,
+    callbacks::instrument::instrument_visitor::InstrumentingVisitor,
     config::DatirConfig,
 };
 

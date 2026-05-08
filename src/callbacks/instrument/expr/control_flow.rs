@@ -4,7 +4,7 @@
 //! evaluates to a `Tagged<bool>`. If the condition contains a pattern-matching let-binding, then
 //! the condition will already be a simple `bool`.
 
-use crate::callbacks::instrument::{expr::common, instrument::InstrumentingVisitor};
+use crate::callbacks::instrument::{expr::common, instrument_visitor::InstrumentingVisitor};
 
 /// Invoked whenever the visitor runs into an `ExprKind::If`.
 ///

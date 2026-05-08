@@ -115,15 +115,12 @@ fn uses_struct() {
         ExpectedSite::new(prefix_with_path_from_root(
             "uses_struct/main.rs::baz:::EXIT",
         ))
-        // a was captured by value. DOES THAT ADDRESS THE BELOW PROBLEM THOUGH? a.c is ultimately still "live"
+        // a was captured by value
         // .register("a.a", 0)
         // .register("a.b", 1)
-        // .register("a.c", 0) // a.c got reassigned, to a.a + a.d + 2*v. it should now be in set 0?
-        // .register("a.d", 0) // ^ this is a problem w.r.t. how site management is done, specifically when variables are bound to exit sites.
-        .register("v", 0), //  it's related to ownership, which is the most interesting part. Should formals that ar ecaptured by value
-                           //  just outright be removed from the exit site? they don't exist after the function runs...
-                           //  but also, in this exact example we capture a struct by value, that contains a reference to a value that
-                           //  survives beyond the struct's lifetime...
+        // .register("a.c", 0) 
+        // .register("a.d", 0) 
+        .register("v", 0),
     );
 
     expected.register_site(

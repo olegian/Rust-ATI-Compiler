@@ -18,7 +18,7 @@
 use rustc_ast_pretty::pprust;
 
 use crate::callbacks::gather::{first_pass_info::FnNamespace, type_key};
-use crate::callbacks::instrument::{instrument::InstrumentingVisitor, types};
+use crate::callbacks::instrument::{instrument_visitor::InstrumentingVisitor, types};
 
 /// Walks the body, then wraps parameter and return types in `Tagged<T>`
 /// for free functions that pass 1 observed.

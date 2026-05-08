@@ -15,7 +15,7 @@
 //! Impl blocks have each method instrumented, and input parameter and return types transformed
 //! Items within submodules are recursively transformed.
 
-use crate::callbacks::instrument::instrument::InstrumentingVisitor;
+use crate::callbacks::instrument::instrument_visitor::InstrumentingVisitor;
 
 mod bodies;
 pub mod data_types;

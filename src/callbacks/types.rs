@@ -54,12 +54,10 @@ impl CanBeTupled for rustc_middle::ty::Ty<'_> {
 impl CanBeTupled for rustc_ast::token::Lit {
     /// Returns true if the AST literal type can be directly wrapped in `Tagged<T>`.
     fn can_be_tupled(&self) -> bool {
-        match self.kind {
+        matches!(self.kind,
             rustc_ast::token::LitKind::Integer
             | rustc_ast::token::LitKind::Float
             | rustc_ast::token::LitKind::Bool
-            | rustc_ast::token::LitKind::Char => true,
-            _ => false,
-        }
+            | rustc_ast::token::LitKind::Char)
     }
 }

@@ -34,7 +34,7 @@
 //!   knowing if the condition has a let-pattern binding within it, via 
 //!   [common::contains_let_chain].
 
-use crate::callbacks::instrument::{instrument::InstrumentingVisitor, item::data_types};
+use crate::callbacks::instrument::{instrument_visitor::InstrumentingVisitor, item::data_types};
 
 mod addr_of;
 mod array;

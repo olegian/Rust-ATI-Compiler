@@ -3,7 +3,7 @@
 //! Structs and tuples have thier field types recursively tupled, as defined in
 //! [crate::callbacks::instrument::types].
 
-use crate::callbacks::instrument::{instrument::InstrumentingVisitor, types};
+use crate::callbacks::instrument::{instrument_visitor::InstrumentingVisitor, types};
 
 /// Tuples all tupleable types in the struct's fields.
 pub fn transform_struct(_visitor: &mut InstrumentingVisitor, struct_item: &mut rustc_ast::Item) {
