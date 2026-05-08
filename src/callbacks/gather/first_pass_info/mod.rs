@@ -85,4 +85,12 @@ pub struct FirstPassInfo {
     /// require untupling, so that the patterns within each arm of the statement
     /// can actually match on the target.
     pub match_on_tagged: SpanFacts<()>,
+
+    /// Spans of literal / range sub-patterns whose pattern type is tupleable.
+    /// Post-instrumentation, the position holding such a sub-pattern has type
+    /// `Tagged<T>` rather than `T`, so a bare literal/range no longer
+    /// type-checks. Pass 2 lifts each marked sub-pattern out into a fresh
+    /// binding plus a match-guard fragment that re-checks the original
+    /// pattern against the dereferenced inner value.
+    pub tagged_lit_pat: SpanFacts<()>,
 }

@@ -49,6 +49,10 @@ fn main() {
     let b = 2;
     let c = 3;
     untracked_primitive("world", a, b, c);
+
+    let x = MyEnum::V2(10);
+    let y = 40;
+    destructure_to_value(&x, y);
 }
 
 fn foo(x: &MyEnum, y: usize) -> usize {
@@ -137,6 +141,7 @@ fn primitive(x: u32, y: u32) -> u32 {
 
 fn primitive_mut(mut x: u32, y: u32) -> u32 {
     match &mut x {
+        // idea is to convert above x: TaggedRefMut<u32>  into x.1 so it becomes just a u32
         0..=5  => { x + y }
         6..=10 => { x + y }
         _      => { y }
@@ -148,5 +153,21 @@ fn untracked_primitive(x: &str, a: u32, b: u32, c: u32) -> u32 {
         "hello" => a,
         "world" => b,
         _ => c
+    }
+}
+
+fn destructure_to_value(x: &MyEnum, y: usize) -> usize {
+    match x {
+        MyEnum::V1 => { y },
+        MyEnum::V2(10) => { y },
+        // idea is to turn the above into this:
+        // MyEnum::V2(x) if *x == 10 => { y },
+        MyEnum::V2(x) => { x + y },
+        MyEnum::V3(my_struct) => {
+            my_struct.x + y
+        },
+        MyEnum::V4(items) => {
+            items.len() + y
+        },
     }
 }

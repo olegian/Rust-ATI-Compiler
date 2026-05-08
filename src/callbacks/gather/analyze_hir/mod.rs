@@ -37,6 +37,13 @@
 //!   to be a `Tagged<T>`, `TaggedRef<T>`, or `TaggedRefMut<T>`, we need to untuple the target
 //!   to allow all existing arms to pattern-match on the underlying `T`. Compound types do not 
 //!   require this treatment, as their shape is unchanged.
+//!   
+//!   A match statement could howver match on a compound type, that compound type could have tagged
+//!   atomics within it. Any pattern which contains a literal would fail to pattern match against
+//!   the tagged type. Therefore, we life those kinds of patterns into arm guard clauses, so that 
+//!   the `MyEnum::Variant(10)` pattern being matched upon, becomes 
+//!   `MyEnum::Variant(x) if x == ATI::track(10)`, which preseves the pattern semantics, but allows
+//!   the comparison to happen between two Tagged types.
 //!
 //! As of 3/29/26, we are choosing to ignore uninstrumented libraries, meaning that
 //! the first bullet is really an unnecessary step. The code is still left, as a proof-of-concept.

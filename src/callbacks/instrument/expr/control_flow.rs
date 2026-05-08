@@ -4,7 +4,15 @@
 //! evaluates to a `Tagged<bool>`. If the condition contains a pattern-matching let-binding, then
 //! the condition will already be a simple `bool`.
 
-use crate::callbacks::instrument::{expr::common, instrument_visitor::InstrumentingVisitor};
+use rustc_ast_pretty::pprust;
+
+use crate::callbacks::{
+    instrument::{
+        expr::common::{self, lift_lit_pats},
+        instrument_visitor::InstrumentingVisitor,
+    },
+    parsing,
+};
 
 /// Invoked whenever the visitor runs into an `ExprKind::If`.
 ///
@@ -46,11 +54,25 @@ pub fn transform_for(_visitor: &mut InstrumentingVisitor, for_expr: &mut rustc_a
 
 pub fn transform_loop(_visitor: &mut InstrumentingVisitor, _loop_expr: &mut rustc_ast::Expr) {}
 
-/// If the first pass identified this match as requiring the target to be untupled,
-/// this function does so. This makes the match on a tagged type instead match on the underlying
-/// `T`, keeping the match's arms valid patterns.
+/// Pass 2's response to a `match` expression. Two structurally distinct
+/// rewrites, controlled by what pass 1 marked (see
+/// `crate::callbacks::gather::analyze_hir::match_expr` for the analysis):
+///
+/// 1. If the target was tagged in `match_on_tagged`, the whole target became
+///    `Tagged<T>` / `TaggedRef<T>` / `TaggedRefMut<T>` after instrumentation.
+///    Untuple it via `.1` so the existing arm patterns continue to match
+///    against the underlying `T`.
+///
+/// 2. Otherwise the target is a compound type, but individual arm
+///    sub-patterns may have been marked in `tagged_lit_pat`: literal/range
+///    patterns whose position became `Tagged<T>` (e.g. `MyEnum::V2(10)` once
+///    `V2`'s field is `Tagged<usize>`). For each such sub-pattern, replace it
+///    with a fresh `ref __ati_pat_N` binding and append a guard fragment
+///    `matches!(**__ati_pat_N, <orig>)` that re-checks the
+///    original pattern against the dereferenced inner value. Guard fragments
+///    are AND-combined with each other and with any pre-existing arm guard.
 pub fn transform_match(visitor: &mut InstrumentingVisitor, match_expr: &mut rustc_ast::Expr) {
-    let rustc_ast::ExprKind::Match(target, _arms, _kind) = &mut match_expr.kind else {
+    let rustc_ast::ExprKind::Match(target, arms, _kind) = &mut match_expr.kind else {
         return;
     };
 
@@ -60,6 +82,27 @@ pub fn transform_match(visitor: &mut InstrumentingVisitor, match_expr: &mut rust
         .contains(target.span, visitor.psess.source_map())
     {
         common::untuple(target);
+        return;
+    }
+
+    for arm in arms {
+        let mut counter: usize = 0;
+        let mut frags: Vec<String> = Vec::new();
+        lift_lit_pats(visitor, &mut arm.pat, &mut counter, &mut frags);
+        if frags.is_empty() {
+            continue;
+        }
+
+        let combined = frags.join(" && ");
+        let new_cond_str = match &arm.guard {
+            Some(g) => format!("({}) && ({})", pprust::expr_to_string(&g.cond), combined),
+            None => combined,
+        };
+        let new_cond = parsing::parse_expr(visitor.psess, new_cond_str);
+        arm.guard = Some(Box::new(rustc_ast::Guard {
+            cond: new_cond,
+            span_with_leading_if: rustc_span::DUMMY_SP,
+        }));
     }
 }
 
