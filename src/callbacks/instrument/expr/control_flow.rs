@@ -46,7 +46,19 @@ pub fn transform_for(_visitor: &mut InstrumentingVisitor, for_expr: &mut rustc_a
 
 pub fn transform_loop(_visitor: &mut InstrumentingVisitor, _loop_expr: &mut rustc_ast::Expr) {}
 
-pub fn transform_match(_visitor: &mut InstrumentingVisitor, match_expr: &mut rustc_ast::Expr) {}
+pub fn transform_match(visitor: &mut InstrumentingVisitor, match_expr: &mut rustc_ast::Expr) {
+    let rustc_ast::ExprKind::Match(target, arms, kind) = &mut match_expr.kind else {
+        return;
+    };
+
+    if visitor
+        .first_pass
+        .match_on_tagged
+        .contains(target.span, visitor.psess.source_map())
+    {
+        common::untuple(target);
+    }
+}
 
 // Handled in transform
 pub fn transform_let_condition(

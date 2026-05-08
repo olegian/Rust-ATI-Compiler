@@ -42,6 +42,7 @@ mod call;
 mod deref;
 mod index;
 mod references;
+mod match_expr;
 
 /// Visitor that finds code spans of interest (listed at the top of this file).
 /// Updates `self.first_pass` to include this information.
@@ -138,6 +139,10 @@ impl<'tcx, 'a> rustc_hir::intravisit::Visitor<'tcx> for AnalyzeHirVisitor<'tcx, 
             // to the appropriate subslice operation in the next pass.
             rustc_hir::ExprKind::Index(..) => {
                 self.observe_range(expr);
+            }
+
+            rustc_hir::ExprKind::Match(..) => {
+                self.observe_match(expr);
             }
 
             _ => {}

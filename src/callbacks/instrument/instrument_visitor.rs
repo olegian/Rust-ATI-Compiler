@@ -199,6 +199,8 @@ impl<'a> rustc_ast::mut_visit::MutVisitor for InstrumentingVisitor<'a> {
         item::transform_item(self, item)
     }
 
+    fn visit_pat(&mut self,node: &mut rustc_ast::Pat) { }
+
     /// After transforming all expressions, iterate through all statements and
     /// hoist any necessary method calls.
     /// The hoisting transformation happens after the statement is walked and transformed.

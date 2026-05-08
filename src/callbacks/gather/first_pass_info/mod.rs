@@ -80,4 +80,6 @@ pub struct FirstPassInfo {
     /// later in the function. The reborrow is always a semantically safe operation in an
     /// operand position.
     pub ref_mut_to_tupleable: SpanFacts<()>,
+
+    pub match_on_tagged: SpanFacts<()>,
 }
