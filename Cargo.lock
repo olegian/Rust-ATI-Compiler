@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "compiler_queries"
+name = "datir"
 version = "0.1.0"
 dependencies = [
  "decls-gen",
