@@ -23,7 +23,7 @@ For more usage information, run `cargo +nightly run -- --help`.
 
 Note that if this project is built into a binary, and separately executed it requires extra linking with `rustc`'s private libraries to execute, by setting the `LD_LIBRARY_PATH` environment variable to point to the nightly compiler build (e.g. `$REPO_HOME/target/debug/deps:$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib`). Until this is resolved, it's easiest to stick with the `cargo run` option mentioned above.
 
-If typing `+nightly` becomes tedious, feel free to run `rustup default nightly` to default to the nightly compiler build. After executing that command, you can simply omit `+nightly`. To switch back to the stable build, use `rustup default stable`.
+If typing `+nightly` becomes tedious, feel free to run `rustup default nightly` to default to the nightly compiler build. After executing that command, you can simply omit the nightly flag. To switch back to the stable build as the default, use `rustup default stable`.
 
 ## File Description
 The following files make up the majority of the implementation:
