@@ -15,8 +15,6 @@
 #![feature(rustc_private)]
 // allows using the `box` keyword in patterns to match on std::Box
 #![feature(box_patterns)]
-// allows performing trait specialization, i.e. impl trait for T and impl trait
-#![feature(min_specialization)]
 
 // allows performing trait specialization, which the runtime ati library
 // makes heavy use of to dispatch the appropriate function during monomorphization.
@@ -31,6 +29,8 @@
 // for Wrapper<T> rather than for T. Without min_specialization, those trait
 // implementations would overlap.
 // Note: full_specialization is unsound, and also unnecessary here.
+// #![feature(min_specialization)]
+
 // Note: This feature is only necessary if `mod ati` is uncommented below.
 // #![feature(step_trait)]
 

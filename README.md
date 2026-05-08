@@ -19,49 +19,40 @@ At this point, you should be able to compile and run this project with:
 cargo run [OPTIONAL] -- INPUT [OPTIONAL]
 ```
 
-Optional arguments passed before the `--` are passed to the `rustc` invocation responsible for building the instrumentation compiler. Optional arguments passed after are forwarded to the compiler invocation when instrumenting `INPUT`.
+For more usage information, run `cargo run -- --help`.
 
-Note that if this project is built into a binary, it requires extra linking with `rustc`'s private library to execute, by setting the `LD_LIBRARY_PATH` environment variable to point to the nightly compiler build (e.g. `$REPO_HOME/target/debug/deps:$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib`). Until this is resolved, it's easiest to stick with the `cargo run` option mentioned above.
+Note that if this project is built into a binary, and separately executed it requires extra linking with `rustc`'s private libraries to execute, by setting the `LD_LIBRARY_PATH` environment variable to point to the nightly compiler build (e.g. `$REPO_HOME/target/debug/deps:$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib`). Until this is resolved, it's easiest to stick with the `cargo run` option mentioned above.
 
 ## File Description
 The following files make up the majority of the implementation:
 
-1. `src/ati/*`: Contains the ATI library that is used at runtime to dynamically keep track of value interactions.
-2. `src/callbacks/*`: Defines the callbacks used by various compiler invocations. DATIR currently relies on being able to perform two compilations, one to generally gather some information, another to perform the actual instrumentation.
-3. `src/file_loaders/*`: Defines a custom FileLoader which is capable of performing AST-level mutations before the file contents even make it to the compiler parser.
-4. `src/types/*`: Defines helpful collections of data used throughout the project.
-4. `src/visitors/*`: Defines the visitors which mutate or discover information from various IRs. These visitors are ultimately orchestrated by the callbacks or FileLoaders.
-6. `src/common/*`: Miscellaneous helper functions, used throughout.
+1. `src/ati/*`: Contains the ATI runtime library that is used at runtime to dynamically keep track of value interactions. All files within this directory are injected into the target crate.
+2. `src/callbacks/*`: Defines the callbacks used by various compiler invocations. DATIR currently relies on being able to perform two compilations, one to generally gather some information (`src/callbacks/gather`), another to perform the actual instrumentation (`src/callbacks/instrument`). Following instrumentation, some extra code has to be generated and inserted into the crate. This is done by code contained within `src/callbacks/codegen`.
+3. `src/file_loader/*`: Defines a custom rustc-compatible `FileLoader` which is capable of performing AST-level mutations before the file contents even make it to the compiler parser. This allows instrumentation of all files, not just the crate root.
 7. `tests/*`: Unit tests, which invoke the compiler on input files and checks the ATI output against an expected partition.
 
 ## Output
-The exact form of output is governed by `src/ati/ati.rs::ATI::report()`. This function is invoked right before `main` exits. Currently, the output is just written to stdout, starting with `===ATI-ANALYSIS-START===`. For example, the following output is produced by instrumenting and executing a simple program which has `main` invoke another function `foo`, which accepts three parameters `x`, `y`, and `z` (`tests/simple/input.rs`). The values of `x` and `y` are used to compute the return value, `RET`.
+DATIR can produce two kinds of output, based on what flags are used to invoke it. If `--release ATI_OUTPUT_DIR` is specified, then the produced target binary will write a file to the output directory every time it is invoked, in the `.ati` format that is compatible with the `decls-merger`.
+
+If `--release` is unspecified, then executing the produced target binary will instead simple print the comparability report to stdout, in the following format:
 
 ```
 ===ATI-ANALYSIS-START===
-foo::ENTER
-x:0
-y:1
-z:2
+tests/simple/main.rs::foo:::ENTER
+x -> 1
+y -> 1
+z -> 2
 ---
-foo::EXIT
-RET:0
-x:0
-y:0
-z:2
+tests/simple/main.rs::foo:::EXIT
+return -> 0
+x -> 0
+y -> 0
+z -> 2
 ---
-main::ENTER
+tests/simple/main.rs::main:::ENTER
 ---
-main::EXIT
+tests/simple/main.rs::main:::EXIT
 ---
 ```
 
 This instrumentation only reports the abstract types of formals and return values, ultimately to construct a program specification.
-
-## Features yet to be implemented:
-The following is a list of features still in progress:
-
-1. It is left unspecified how to handle complex return types from untracked functions.
-2. Methods implemented on structs or enums
-3. Enums?
-4. Closures?
