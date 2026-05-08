@@ -25,6 +25,8 @@ Note that if this project is built into a binary, and separately executed it req
 
 If typing `+nightly` becomes tedious, feel free to run `rustup default nightly` to default to the nightly compiler build. After executing that command, you can simply omit the nightly flag. To switch back to the stable build as the default, use `rustup default stable`.
 
+All rust toolchains assume a C-linker is available. If you run into a `linker 'cc' not found` error upon running a cargo command, install the tried and true `gcc` toolchain with `sudo apt install build-essential` (on Linux).
+
 ## File Description
 The following files make up the majority of the implementation:
 
