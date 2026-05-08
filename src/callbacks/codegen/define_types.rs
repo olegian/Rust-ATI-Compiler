@@ -1,7 +1,7 @@
 //! Defines functions which can parse and include all items defined within the runtime libary
-//! (all files within `src/ati/*.rs`, except the mod.rs file).
+//! (all files within `src/ati/*.rs`, except the `mod.rs` file).
 //!
-//! The runtime libary is only injected into the crate root file (main.rs / lib.rs). All other
+//! The runtime libary is only injected into the crate root file (`main.rs` or `lib.rs`). All other
 //! dependancy files should import the crate root (via a `use crate::*;`) statement to make all
 //! types available. It's important to only inject the library once, specifically so the
 //! `ATI_ANALYSIS` global, which holds value-interaction state, is only defined once in the
@@ -37,7 +37,7 @@ pub fn define_types_from_file(file: &std::path::Path, psess: &ParseSess, krate: 
     }
 }
 
-/// Adds a crate attribute tag (#![feature(...)]) to the crate.
+/// Adds a crate attribute tag (`#![feature(...)]`) to the crate.
 pub fn add_crate_attribute(attr: &str, psess: &ParseSess, krate: &mut ast::Crate) {
     let attr = parsing::parse_single_unstable_compiler_attribute(psess, attr.into(), None);
     krate.attrs.push(attr);
