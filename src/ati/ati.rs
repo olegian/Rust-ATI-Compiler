@@ -1,36 +1,52 @@
-/// Defines all types used to perform dynamic ATI.
-///
-/// Every type in this file is injected into the instrumented code by `codegen/define_types.rs`.
-///
-/// Key points include:
-/// 1. `struct ATI` - A single global instance of this struct exists in the program
-///    accessible everywhere within the instrumented files, which holds the value_uf
-///    UnionFind (tracking all value interaction, globally) alongside the actual
-///    abstract type partition at each site. All interactions with ATI instrumentation
-///    are done by calling methods associated with this struct.
-/// 2. `struct Site` - A program point, created in stubs, which stores the abstract
-///    types of variables registered to it.
-/// 3. `struct Sites` - Maintains a collection of program points, all the sites in the
-///    instrumented file.
-/// 4. `struct UnionFind` - A simple union find data structure, with some classic rank
-///    optimization.
-// FIXME: this file definitiely has some dead code somewhere, and can probably be
+//! Core analysis state for dynamic abstract type inference.
+//!
+//! Every type in this file is injected into the instrumented crate by
+//! `crate::callbacks::codegen::define_types`.
+//!
+//! Key points are summarized below.
+//!
+//! [ATI] is the single global owner of analysis state. The [`ATI_ANALYSIS`] static holds it
+//! inside an `Arc<Mutex<..>>` so every instrumented method call can acquire it. It contains
+//! the value union-find (which tracks every interaction between tracked values across the
+//! whole program) and the collection of sites (which produce the per-site abstract type
+//! partition).
+//!
+//! [Site] is a program point created by the shims emitted by
+//! `crate::callbacks::codegen::function`. Each site records which tagged values were bound
+//! to which variable name, and at the end of analysis emits the partition over those
+//! variables. [Sites] owns the collection of every program point seen during analysis.
+//!
+//! [UnionFind] is a basic union-find structure with rank optimization, used both for tracking
+//! value interactions globally and for collapsing variable tags within a single site into the
+//! abstract type representative.
+
+// FIXME: this file definitely has some dead code somewhere, and can probably be
 // refactored to remove some functions.
-use crate::ati::tagged::{Id, Tagged, TaggedRef, TaggedRefMut, Tagger};
+use crate::ati::tagged::{Id, Tagged, Tagger};
 
 /// Top-level global that owns all information about all value interactions
 /// and ATI site states.
 pub static ATI_ANALYSIS: std::sync::LazyLock<std::sync::Arc<std::sync::Mutex<ATI>>> =
     std::sync::LazyLock::new(|| std::sync::Arc::new(std::sync::Mutex::new(ATI::new())));
 
-/// Represents a Site under analysis, ultimately a mapping of in-scope
-/// variables to thier values at the start and end of each function.
+/// A program point under analysis. Maps in-scope variables to their tagged values at the
+/// start and end of each function.
+///
+/// Each instrumented entry/exit ppt has a single [Site]. Variables observed at the ppt are
+/// collected in `observed_var_tags`, and [`Site::update`] folds them into `var_tags` /
+/// `type_uf` to produce the per-variable abstract type representative.
 #[derive(Debug)]
 pub struct Site {
+    /// Per-site union-find used to collapse variable tags into a single abstract-type
+    /// representative once the value union-find has had a chance to merge interactions.
     type_uf: UnionFind,
+    /// Stable mapping from variable name to its current abstract-type representative.
+    /// Populated incrementally by [`Site::update`] from `observed_var_tags`.
     var_tags: std::collections::BTreeMap<String, Id>,
+    /// Variables seen at this site since the last [`Site::update`] call. Cleared on update.
     observed_var_tags: std::collections::HashMap<String, Id>,
-    name: String, // Debug information
+    /// Human-readable ppt name, used for debug output and `.decls`-format emission.
+    name: String,
 }
 
 impl Site {
@@ -44,20 +60,25 @@ impl Site {
         }
     }
 
-    /// Records that a particular `tv: Tagged<T>` was bound to a variable
-    /// named `var_name` at this site.
+    /// Records that the variable named `var_name` was bound to a tagged value with the given
+    /// `id` at this site. Called from generated shims for each in-scope tracked variable.
     pub fn bind(&mut self, var_name: &str, id: Id) {
         self.observed_var_tags.insert(var_name.into(), id);
     }
 
-    /// Algorithm from paper, updates ATI information based on observed_vars
+    /// Folds the variables observed since the last update into the per-site partition.
+    ///
+    /// For each observed variable, looks up the current leader of its tag in `value_uf` and
+    /// merges that leader with whatever leader was previously chosen for the variable. This is
+    /// the algorithm from the paper. A variable's abstract type is the union-find class of
+    /// every `value_uf` leader it has ever been observed to hold.
     pub fn update(&mut self, value_uf: &mut UnionFind) {
         // for each variable
         for (var, new_tag) in self.observed_var_tags.iter_mut() {
             match self.var_tags.get_mut(var) {
                 // we have previously seen this variable at this site,
                 // and chosen some previous leader tag (within the value_uf)
-                // to be the canonnical representation for the abstract type
+                // to be the canonical representation for the abstract type
                 // associated with this variable.
                 Some(prev_leader) => {
                     let new_leader = value_uf.find(prev_leader).unwrap();
@@ -80,7 +101,7 @@ impl Site {
 
                 // this is the first time we are observing this variable at this site.
                 // make the value_uf leader of whatever Id is associated with the current value
-                // stored within this variable the canonnical abstract type set of this variable.
+                // stored within this variable the canonical abstract type set of this variable.
                 None => {
                     // find the current leader tag associated with the value's interaction set
                     let leader = value_uf.find(new_tag).unwrap();
@@ -99,7 +120,7 @@ impl Site {
         }
     }
 
-    /// Produces ATI output, called at the end of main.
+    /// Produces ATI output for this site to stdout. Called at the end of main.
     pub fn report(&mut self) {
         println!("{}", self.name);
         for (var, tag) in self.var_tags.iter() {
@@ -109,13 +130,13 @@ impl Site {
         println!("---");
     }
 
-    /// Emits the variable blocks for this site in .decls format.
+    /// Emits the variable blocks for this site in `.ati` format.
     pub fn produce_ati(&mut self, output: &mut std::fs::File) {
         use std::io::Write;
 
         for (var, tag) in self.var_tags.iter() {
             // Do this in the merger. .ati files include all information for all
-            // vars. even nested arrays. We will then reconstrut [..] comp information
+            // vars. even nested arrays. We will then reconstruct [..] comp information
             // by unioning the ATs of contained values.
             // let Some(var) = collapse_array_indices(var) else {
             //     continue;
@@ -127,12 +148,15 @@ impl Site {
     }
 }
 
-/// Manages multiple Sites at once, to allow for analyzing multiple functions
+/// Owns the collection of every analyzed site, keyed by ppt name.
 pub struct Sites {
+    /// Sites currently parked in the collection. A site is removed from the map while a shim
+    /// is registering variables to it (via [`Sites::extract`]) and reinserted via
+    /// [`Sites::stash`] once that shim finishes.
     locs: std::collections::BTreeMap<String, Site>,
 }
 impl Sites {
-    /// Constructor
+    /// Creates an empty `Sites` collection.
     pub fn new() -> Self {
         Sites {
             locs: std::collections::BTreeMap::new(),
@@ -154,7 +178,7 @@ impl Sites {
         self.locs.insert(site.name.clone(), site);
     }
 
-    /// Output results for all analyzed sites.
+    /// Outputs results for all analyzed sites to stdout.
     pub fn report(&mut self) {
         println!("===ATI-ANALYSIS-START===");
         for (_, site) in self.locs.iter_mut() {
@@ -162,7 +186,7 @@ impl Sites {
         }
     }
 
-    /// Emits a .decls file covering all sites.
+    /// Emits an `.ati` file covering all sites.
     pub fn produce_ati(&mut self, mut output: std::fs::File) {
         use std::io::Write;
 
@@ -175,18 +199,27 @@ impl Sites {
     }
 }
 
-/// Basic UnionFind implementation, with some light rank optimization.
+/// Basic UnionFind implementation, with light rank optimization.
+///
+/// Keys are [`Id`]s. Internally the structure stores parents and ranks in `Vec`s indexed by
+/// dense `usize`s, with `id_to_index` / `index_to_set` translating between an [`Id`] and its
+/// slot. A bundled [`Tagger`] hands out fresh [`Id`]s for [`UnionFind::make_set`].
 #[derive(Debug)]
 pub struct UnionFind {
+    /// Reverse lookup from an externally meaningful [`Id`] to its dense index.
     id_to_index: std::collections::HashMap<Id, usize>,
-    pub index_to_set: Vec<Id>,
+    /// Dense index back to [`Id`].
+    index_to_set: Vec<Id>,
+    /// Standard union-find parent array, indexed by dense slot.
     parent: Vec<usize>,
+    /// Per-slot rank, used to keep tree depth small during `union`.
     rank: Vec<usize>,
+    /// Source of fresh [`Id`]s for [`UnionFind::make_set`].
     tagger: Tagger,
 }
 
 impl UnionFind {
-    /// Constructor
+    /// Creates an empty UnionFind.
     pub fn new() -> Self {
         Self {
             id_to_index: std::collections::HashMap::new(),
@@ -204,7 +237,7 @@ impl UnionFind {
         self.introduce_tag(id)
     }
 
-    /// Adds the passed in id to the UnionFind, in it's own set.
+    /// Adds the passed in id to the UnionFind, in its own set.
     /// If a set already exists for this Id, does nothing.
     pub fn introduce_tag(&mut self, id: Id) -> Id {
         if self.id_to_index.contains_key(&id) {
@@ -258,7 +291,7 @@ impl UnionFind {
         root
     }
 
-    /// Associates the indecies `x` and `y` together, putting them
+    /// Associates the indices `x` and `y` together, putting them
     /// in the same set.
     fn union_indices(&mut self, x: usize, y: usize) -> usize {
         let x_root = self.find_index(x);
@@ -282,14 +315,20 @@ impl UnionFind {
     }
 }
 
-/// This struct owns all necessary information for analysis.
+/// Top-level analysis state. The single live instance is stored in [`ATI_ANALYSIS`].
+///
+/// Every instrumented operation acquires the surrounding `Mutex<ATI>`, mutates either the
+/// global value union-find or the relevant [Site], and releases the lock.
 pub struct ATI {
+    /// Global value union-find. Every interaction between two tracked values (e.g. a
+    /// comparison or an arithmetic op) merges the two operand ids here.
     value_uf: UnionFind,
+    /// Collection of program points, keyed by ppt name.
     sites: Sites,
 }
 
 impl ATI {
-    /// Intializes a new global ATI tracker.
+    /// Initializes a new global ATI tracker.
     pub fn new() -> Self {
         Self {
             value_uf: UnionFind::new(),
@@ -297,58 +336,11 @@ impl ATI {
         }
     }
 
-    /// Moves a value from a standard type `T` to a `Tagged<T>`,
-    /// assigning it a unique Id
+    /// Moves a value from a standard type `T` to a [`Tagged<T>`],
+    /// assigning it a unique Id.
     pub fn track<T>(value: T) -> Tagged<T> {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
         Tagged(id, value)
-    }
-
-    pub fn track_range<T>(start: Tagged<T>, end: Tagged<T>) -> Tagged<std::ops::Range<Tagged<T>>> {
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        let id = ati.value_uf.make_set();
-        ati.value_uf.union_tags(&id, &start.0);
-        ati.value_uf.union_tags(&id, &end.0);
-        Tagged(id, std::ops::Range { start, end })
-    }
-
-    pub fn track_range_inclusive<T>(
-        start: Tagged<T>,
-        end: Tagged<T>,
-    ) -> Tagged<std::ops::RangeInclusive<Tagged<T>>> {
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        let id = ati.value_uf.make_set();
-        ati.value_uf.union_tags(&id, &start.0);
-        ati.value_uf.union_tags(&id, &end.0);
-        Tagged(id, std::ops::RangeInclusive::new(start, end))
-    }
-
-    pub fn track_range_from<T>(start: Tagged<T>) -> Tagged<std::ops::RangeFrom<Tagged<T>>> {
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        let id = ati.value_uf.make_set();
-        ati.value_uf.union_tags(&id, &start.0);
-        Tagged(id, std::ops::RangeFrom { start })
-    }
-
-    pub fn track_range_to<T>(end: Tagged<T>) -> Tagged<std::ops::RangeTo<Tagged<T>>> {
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        let id = ati.value_uf.make_set();
-        ati.value_uf.union_tags(&id, &end.0);
-        Tagged(id, std::ops::RangeTo { end })
-    }
-
-    pub fn track_range_to_inclusive<T>(
-        end: Tagged<T>,
-    ) -> Tagged<std::ops::RangeToInclusive<Tagged<T>>> {
-        let mut ati = ATI_ANALYSIS.lock().unwrap();
-        let id = ati.value_uf.make_set();
-        ati.value_uf.union_tags(&id, &end.0);
-        Tagged(id, std::ops::RangeToInclusive { end })
-    }
-
-    pub fn track_range_full() -> Tagged<std::ops::RangeFull> {
-        let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
-        Tagged(id, std::ops::RangeFull)
     }
 
     /// Fetches a site, or creates it, with the given name.
@@ -363,28 +355,30 @@ impl ATI {
         self.sites.stash(site);
     }
 
+    /// Unions two ids in the global value union-find and returns the new leader.
     pub fn union_and_get_id(&mut self, id1: &Id, id2: &Id) -> Id {
         self.value_uf.union_tags(id1, id2).unwrap()
     }
 
+    /// Allocates a fresh id in the value union-find. Used by operators that produce a result
+    /// not directly equivalent to either operand (e.g. comparison, shift).
     pub fn make_id(&mut self) -> Id {
         self.value_uf.make_set()
     }
 
-    /// Observe two tagged values interacting together, merging them in
-    /// value_uf.
+    /// Observes two tagged values interacting and merges their ids in the value union-find.
     pub fn union_tags<T>(&mut self, tv1: &Tagged<T>, tv2: &Tagged<T>) {
         self.value_uf.union_tags(&tv1.0, &tv2.0);
     }
 
-    /// Produce output partition that defines abstract types.
+    /// Produces the output partition that defines abstract types, written to stdout.
     pub fn report(&mut self) {
         self.sites.report();
     }
 
-    /// Produce output in .decls format.
-    // FIXME: would be nice to conditionally include either this or what is required for report() to function,
-    // no reason to include both in executable everytime
+    /// Writes the analysis result to `output_file` in `.ati` format.
+    // FIXME: would be nice to conditionally include either this or what is required for
+    // report() to function, no reason to include both in executable every time
     pub fn produce_ati(&mut self, output_file: &str) {
         let cwd = std::env::current_dir().expect("Unable to determine current working directory.");
         let file = cwd.join(output_file);

@@ -57,7 +57,7 @@ extern crate rustc_span;
 extern crate smallvec;
 extern crate thin_vec;
 
-use crate::config::DatirConfig;
+pub use crate::config::DatirConfig;
 use decls_gen::DeclsFile;
 
 // include so VsCode's rust-analyzer extension runs static analysis on the runtime library
@@ -84,7 +84,7 @@ impl std::fmt::Display for DatirError {
 /// Executes DATIR end-to-end: runs both compiler passes against `target`,
 /// producing an instrumented binary at `output` (or rustc's default location
 /// if `None`). Use this entrypoint to invoke DATIR programmatically.
-fn run(
+pub fn run(
     config: DatirConfig,
     target: &std::path::Path,
     output: Option<&std::path::Path>,
@@ -130,7 +130,7 @@ fn run(
 
 /// Parses DATIR's command-line options into the
 /// inputs that [`run`] expects, then delegates.
-fn main() {
+pub fn main() {
     // this is mostly a placeholder string, for printing a nice usage message.
     let program = std::env::args()
         .next()

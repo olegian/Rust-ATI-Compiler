@@ -131,7 +131,7 @@
 //! 3. [super::item] for how individual items are transformed.
 //! 4. [super::hoisting] for how the hoisting mechanism works.
 //! 5. [crate::ati::ati] for how global analysis state is managed.
-//! 6. [crate::ati::index] for how arrays and slices are indexed with usizes and ranges.
+//! 6. [crate::ati::arrays] for how arrays and slices are indexed with usizes and ranges.
 //! 7. [crate::ati::tagged_ops] for how interactions between values are observed and recorded.
 //! 8. [crate::ati::tagged] for `Tagged` / `TaggedRef` / `TaggedRefMut` definitions and further
 //!    formalization.

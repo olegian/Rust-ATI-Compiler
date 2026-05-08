@@ -17,18 +17,22 @@ use crate::callbacks::parsing;
 /// Adds the rust Items defined in `file` to the input `krate`.
 ///
 /// `file` must be a path to a .rs file containing required struct defs,
-/// enum defs, and thier associated impl blocks.
+/// enum defs, and their associated impl blocks.
 /// This function also handles use statements, removing them entirely. This means
-/// the runtime libary files must only use fully qualified paths to standard libary types.
+/// the runtime library files must only use fully qualified paths to standard library types.
+///
+/// The file is parsed as a crate so that any inner doc comments (`//!`) at the top of the file
+/// are captured as crate-level attributes and discarded, and only the items are injected.
 pub fn define_types_from_file(file: &std::path::Path, psess: &ParseSess, krate: &mut ast::Crate) {
     let code: String = std::fs::read_to_string(file).unwrap();
 
-    let items = parsing::parse_items(psess, code, Some(file));
+    let parsed = parsing::parse_crate(psess, code, Some(file));
 
     // actually add the stuff we've collected to the crate
     // removing any use statements as everything
     // is now going to be in the same file.
-    for (i, item) in items
+    for (i, item) in parsed
+        .items
         .into_iter()
         .filter(|item| !matches!(item.kind, ast::ItemKind::Use(_)))
         .enumerate()

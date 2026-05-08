@@ -1,48 +1,32 @@
+//! Operator-trait implementations for the tagged wrappers.
+//!
+//! Pass 2 leaves arithmetic, comparison, and shift operators looking like ordinary Rust code,
+//! so the standard library's overloaded operator dispatch handles instrumentation through
+//! the impls in this file. Each operator unions the operand ids in the
+//! [ATI_ANALYSIS] value union-find before delegating to the
+//! wrapped primitive.
+//!
+//! Comparison operators ([PartialEq], [PartialOrd], [Eq], [Ord]) are covered for all nine
+//! ordered pairs of [Tagged] / [TaggedRef] / [TaggedRefMut]. Arithmetic and bitwise operators 
+//! (`+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`) merge the lhs, rhs, and result ids. Shift operators
+//! (`<<`, `>>`) merge only the lhs and the result, since the rhs is treated as a count rather
+//! than a value-level interaction. Unary `Neg` and `Not` push down to the underlying value
+//! while keeping the id intact, and `Deref` on [Tagged] enables auto-deref to any `T` method.
+
 use crate::ati::{
     ati::ATI_ANALYSIS,
-    tagged::{Id, Tagged, TaggedRef, TaggedRefMut},
+    refs::{TaggedRef, TaggedRefMut},
+    tagged::{TagTuple, Tagged},
 };
 
-// =====================    COMPARISON OPS / MARKERS    ===================
-/// Every comparison across any pair of {Tagged, TaggedRef, TaggedRefMut}
-/// unions the two tags in the value union-find.
-/// This trait lets the macros below avoid matching on each tagged
-/// form separately
-trait TaggedCmpable<T: ?Sized> {
-    fn tagged_id(&self) -> &Id;
-    fn tagged_value(&self) -> &T;
-}
+// =====================    COMPARISON OPS    ===================
+// Comparison goes through the [TagTuple] trait, which exposes `.id()` and `.value()` on every
+// tagged wrapper. The macros below take advantage of that to avoid matching on each shape
+// separately.
 
-impl<T: ?Sized> TaggedCmpable<T> for Tagged<T> {
-    fn tagged_id(&self) -> &Id {
-        &self.0
-    }
-    fn tagged_value(&self) -> &T {
-        &self.1
-    }
-}
-
-impl<'a, T: ?Sized> TaggedCmpable<T> for TaggedRef<'a, T> {
-    fn tagged_id(&self) -> &Id {
-        self.0
-    }
-    fn tagged_value(&self) -> &T {
-        self.1
-    }
-}
-
-impl<'a, T: ?Sized> TaggedCmpable<T> for TaggedRefMut<'a, T> {
-    fn tagged_id(&self) -> &Id {
-        &*self.0
-    }
-    fn tagged_value(&self) -> &T {
-        &*self.1
-    }
-}
-
-// PartialEq + PartialOrd between an Lhs and Rhs (both of which must impl
-// TaggedCmpable<T>). Unions the tags on every call before delegating
-// comparison to the underlying T.
+/// `PartialEq` and `PartialOrd` between an `lhs` and `rhs` (both of which must impl
+/// [TagTuple]). Unions the tags on every call before delegating comparison to the underlying
+/// `T`.
 macro_rules! impl_tagged_partial_cmp {
     ($($gens:tt),+ ; $lhs:ty, $rhs:ty) => {
         impl<$($gens),+> std::cmp::PartialEq<$rhs> for $lhs
@@ -53,8 +37,8 @@ macro_rules! impl_tagged_partial_cmp {
                 ATI_ANALYSIS
                     .lock()
                     .unwrap()
-                    .union_and_get_id(self.tagged_id(), other.tagged_id());
-                self.tagged_value().eq(other.tagged_value())
+                    .union_and_get_id(&self.id(), &other.id());
+                self.value().eq(other.value())
             }
         }
 
@@ -66,15 +50,15 @@ macro_rules! impl_tagged_partial_cmp {
                 ATI_ANALYSIS
                     .lock()
                     .unwrap()
-                    .union_and_get_id(self.tagged_id(), other.tagged_id());
-                self.tagged_value().partial_cmp(other.tagged_value())
+                    .union_and_get_id(&self.id(), &other.id());
+                self.value().partial_cmp(other.value())
             }
         }
     };
 }
 
-// Eq + Ord for a self-type comparison. Eq/Ord require the same type on both
-// sides, so only the three self-self cases are valid.
+/// `Eq` and `Ord` for a self-type comparison. `Eq` and `Ord` require the same type on both
+/// sides, so only the three self-self cases are valid.
 macro_rules! impl_tagged_total_cmp {
     ($($gens:tt),+ ; $ty:ty) => {
         impl<$($gens),+> std::cmp::Eq for $ty where T: std::cmp::Eq {}
@@ -87,8 +71,8 @@ macro_rules! impl_tagged_total_cmp {
                 ATI_ANALYSIS
                     .lock()
                     .unwrap()
-                    .union_and_get_id(self.tagged_id(), other.tagged_id());
-                self.tagged_value().cmp(other.tagged_value())
+                    .union_and_get_id(&self.id(), &other.id());
+                self.value().cmp(other.value())
             }
         }
     };
@@ -109,9 +93,14 @@ impl_tagged_total_cmp!(T;       Tagged<T>);
 impl_tagged_total_cmp!('a, T;   TaggedRef<'a, T>);
 impl_tagged_total_cmp!('a, T;   TaggedRefMut<'a, T>);
 
-// =====================    ARITHEMATIC OPS    ===================
-// all of these operators merge together the tags of the result, lhs, and rhs.
-macro_rules! impl_tagged_arithematic_op {
+// =====================    ARITHMETIC OPS    ===================
+
+/// Arithmetic-style operators (`+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`) and their assigning
+/// counterparts. The result id is the union of the two operand ids in the value union-find,
+/// and the wrapped value is computed by delegating to `T`'s own operator. Covers the four
+/// owned/borrowed combinations (`Tagged op Tagged`, `Tagged op TaggedRef`, and the opposite
+/// pairs) plus the two assigning variants.
+macro_rules! impl_tagged_arithmetic_op {
     (
         $trait:ident,
         $method:ident,
@@ -203,18 +192,20 @@ macro_rules! impl_tagged_arithematic_op {
     };
 }
 
-impl_tagged_arithematic_op!(Add, add, AddAssign, add_assign, +);
-impl_tagged_arithematic_op!(Sub, sub, SubAssign, sub_assign, -);
-impl_tagged_arithematic_op!(Mul, mul, MulAssign, mul_assign, *);
-impl_tagged_arithematic_op!(Div, div, DivAssign, div_assign, /);
-impl_tagged_arithematic_op!(Rem, rem, RemAssign, rem_assign, %);
-impl_tagged_arithematic_op!(BitAnd, bitand, BitAndAssign, bitand_assign, &);
-impl_tagged_arithematic_op!(BitOr,  bitor,  BitOrAssign,  bitor_assign, |);
-impl_tagged_arithematic_op!(BitXor, bitxor, BitXorAssign, bitxor_assign, ^);
+impl_tagged_arithmetic_op!(Add, add, AddAssign, add_assign, +);
+impl_tagged_arithmetic_op!(Sub, sub, SubAssign, sub_assign, -);
+impl_tagged_arithmetic_op!(Mul, mul, MulAssign, mul_assign, *);
+impl_tagged_arithmetic_op!(Div, div, DivAssign, div_assign, /);
+impl_tagged_arithmetic_op!(Rem, rem, RemAssign, rem_assign, %);
+impl_tagged_arithmetic_op!(BitAnd, bitand, BitAndAssign, bitand_assign, &);
+impl_tagged_arithmetic_op!(BitOr,  bitor,  BitOrAssign,  bitor_assign, |);
+impl_tagged_arithmetic_op!(BitXor, bitxor, BitXorAssign, bitxor_assign, ^);
 
 // =====================    SHIFT OPS    ===================
-// these operators merge together the tags of the lhs and the result, but not
-// the rhs.
+
+/// Shift operators (`<<`, `>>`) and their assigning counterparts. Unlike the arithmetic
+/// operators, the result id is freshly allocated and merged with only the lhs id, since the
+/// rhs (the shift count) is treated as a count rather than a value-level interaction.
 macro_rules! impl_tagged_shift_op {
     (
         $trait:ident,
@@ -299,7 +290,9 @@ impl_tagged_shift_op!(Shl, shl, ShlAssign, shl_assign, <<);
 impl_tagged_shift_op!(Shr, shr, ShrAssign, shr_assign, >>);
 
 // =====================    UNARY OPS    ===================
-// these operators just get pushed down to act on the underlying value.
+// These operators push down to act on the underlying value while preserving the id.
+
+/// Negation, pushed through the wrapper to act on the inner value while keeping the id intact.
 impl<T> std::ops::Neg for Tagged<T>
 where
     T: std::ops::Neg<Output = T>,
@@ -311,6 +304,8 @@ where
     }
 }
 
+/// Logical and bitwise complement, pushed through the wrapper to act on the inner value while
+/// keeping the id intact.
 impl<T> std::ops::Not for Tagged<T>
 where
     T: std::ops::Not<Output = T>,
@@ -321,10 +316,9 @@ where
     }
 }
 
-// this is a really important impl! This gets used for deref coercion,
-// which allows for a &Tagged<T> to automatically be coereced to &T,
-// which allows for dispatching methods that are defined on T using a
-// Tagged<T>.
+/// Used for deref coercion, which allows a `&Tagged<T>` to be automatically
+/// coerced to `&T`, in turn allowing methods defined on `T` to be dispatched on a `Tagged<T>`
+/// receiver.
 impl<T> std::ops::Deref for Tagged<T> {
     type Target = T;
 
