@@ -1,12 +1,14 @@
-//! Following transforming of the existing AST, there is some new code that needs to be
+//! Injects the runtime library, and creates shim functions and compound type trait implementations.
+//! 
+//! Following transforming of the existing AST, there is some additional code that needs to be
 //! generated and injected into the compiled crate. This inserted code is namely used
 //! to perform ENTER/EXIT site management and provide user-defined compound types with
 //! implementation of special runtime-library traits.
 //!
-//! Further, the runtime libary itself must be injected, and feature flags for a few unstable
+//! Further, the runtime libary itself must be injected, alongside feature flags for a few unstable
 //! rust features.
 //!
-//! This module contains the code to perform all of that, done at the end of the Instrumenting
+//! This module contains the code to perform that, done at the end of the Instrument
 //! compilation callback in [crate::callbacks::instrument].
 
 use crate::{callbacks::gather::first_pass_info::FirstPassInfo, config::DatirConfig};

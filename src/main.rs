@@ -1,12 +1,15 @@
 //! DATIR entry points.
 //!
-//! This file parses input command line arguments, then
-//! creates and orchestrates the multiple compiler invocations
-//! required to perform abstract type inference.
+//! This file parses input command line arguments, then orchestrates the multiple compiler 
+//! invocations required to perform abstract type inference, producing an instrumented binary 
+//! that outputs comparability information regarding the parameters and returned values from each
+//! function (and a `.decls` file, describing the declared program points and variables).
 //!
 //! The first compilation gathers necessary information about the source code
 //! (namely some type information), which the second compilation uses to actually mutate the
 //! AST and to add in dynamic instrumentation.
+//! 
+//! See [callbacks] for information about the two compilation steps.
 //!
 //! See --help for usage instructions.
 
@@ -29,16 +32,16 @@
 // for Wrapper<T> rather than for T. Without min_specialization, those trait
 // implementations would overlap.
 // Note: full_specialization is unsound, and also unnecessary here.
-// #![feature(min_specialization)]
+// Another note: This feature is only necessary if `mod ati` is uncommented below.
+#![feature(min_specialization)]
 
-// Note: This feature is only necessary if `mod ati` is uncommented below.
-// #![feature(step_trait)]
+#![feature(step_trait)]
 
 // allows defining a Dynamically Sized Type (used for representing Tagged References
 // to Unsized types like [T]) while allowing automatic coercion from a Sized type.
 // Note: These features are only necessary if `mod ati` is uncommented below.
-// #![feature(unsize)]
-// #![feature(coerce_unsized)]
+#![feature(unsize)]
+#![feature(coerce_unsized)]
 
 // All linked in rustc_private crates
 extern crate rustc_ast;
@@ -58,7 +61,7 @@ use crate::config::DatirConfig;
 use decls_gen::DeclsFile;
 
 // include so VsCode's rust-analyzer extension runs static analysis on the runtime library
-// mod ati;
+mod ati;
 
 mod args;
 mod callbacks;

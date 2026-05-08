@@ -3,12 +3,14 @@
 //! Within main, use [`datir_arg_init`] to construct an [`ArgParser`].
 //!
 //! This defines all flags/positional/keyword arguments that can be passed
-//! into DATIR, [`ArgParser::parse_env`] or [`ArgParser::parse_or_exit`] can
-//! then be used to load all arguments, printing usage if -h/--help is
-//! provided and checking for any missing required arguments.
+//! into DATIR; [`ArgParser::parse_env`] or [`ArgParser::parse_or_exit`] can
+//! then be used to load all arguments. 
+//! 
+//! If DATIR is invoked with `-h` or `--help`, usage instructions and a description of all
+//! arguments is printed.
 //!
-//! Use [`ParsedArg::is_present`] or [`ParsedArg::get_value`] to access specific
-//! argument values, which are always represented as simple string slices.
+//! Use [`ParsedArgs::is_present`] or [`ParsedArgs::get_value`] to access specific
+//! argument values, which are always represented as simple strings.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -67,7 +69,7 @@ pub fn datir_arg_init(program_name: &str) -> ArgParser {
     .arg(ArgSpec::flag(
         "test",
         "--test",
-        "Run in test mode, skipping debug logging, and using regular print ATI output",
+        "Run in test mode, skipping debug logging and printing ATI output to stdout",
     ));
 
     parser
@@ -209,9 +211,9 @@ impl fmt::Display for ArgError {
     }
 }
 
-/// Collects all values that were actually provided for each
-/// command line argument in some invocation. Each argument
-/// is accessible by name, using [`ParsedArgs::is_present`] or
+/// Collection of all values that were provided for each command line argument.
+/// 
+/// Each argument is accessible by name, using [`ParsedArgs::is_present`] or
 /// [`ParsedArgs::get_value`].
 #[derive(Debug, Default)]
 pub struct ParsedArgs {
@@ -251,14 +253,16 @@ impl ArgParser {
         }
     }
 
-    /// Register an allowed argument.
+    /// Register an argument specification.
     pub fn arg(mut self, spec: ArgSpec) -> Self {
         self.specs.push(spec);
         self
     }
 
-    /// Parse `std::env::args()`, skipping `argv[0]`. On error prints usage to
-    /// stderr and exits. On `--help`/`-h` prints usage to stdout and exits.
+    /// Parse `std::env::args()`, skipping `argv[0]`. 
+    /// 
+    /// On error prints usage to stderr and exits. On `--help`/`-h` prints usage to 
+    /// stdout and exits.
     pub fn parse_env(&self) -> ParsedArgs {
         let raw: Vec<String> = std::env::args().skip(1).collect();
         self.parse_or_exit(raw)

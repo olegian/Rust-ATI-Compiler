@@ -4,17 +4,19 @@
 //! code, which means we often have to convert from AST nodes to string representations of those
 //! nodes. All `*_to_string()` functions address this problem. Further, both functions and methods
 //! require some parts that are built in similar ways (e.g. building the input parameters passed
-//! to the inner function).
+//! to the inner function). These shared functions are defined within this module.
 //!
 //! Further, each new shim function / method is required to have a unique name within the namespace
-//! they are defined in.
+//! they are defined in. [`get_unique_inner_name`] governs unique name generation.
 //!
 //! A few other helpers are defined within this file as well, view individual function doc
 //! comments to see what they do.
 
 /// Creates an inner name that does not clash with any other function/method
-/// defined in the same `(mod_path, namespace)` slot. `known` is the set of
-/// existing fn/method names in that slot, see `FnIndex::names_in`
+/// defined in the same `(mod_path, namespace)` slot.
+/// 
+/// `known` is the set of existing fn/method names in that slot, see
+/// [crate::callbacks::gather::first_pass_info::FirstPassInfo], specifically the `FnIndex`.
 pub fn get_unique_inner_name(original: &str, known: &std::collections::HashSet<String>) -> String {
     let mut suffix = 0;
     let mut candidate = format!("{original}{suffix}");
@@ -27,6 +29,7 @@ pub fn get_unique_inner_name(original: &str, known: &std::collections::HashSet<S
 }
 
 /// Converts the generic params to a string like `<'a, T, U: Clone>`.
+/// 
 /// Returns an empty string if there are no generic params.
 pub fn generic_params_to_string(generics: &rustc_ast::Generics) -> String {
     if generics.params.is_empty() {
@@ -86,8 +89,9 @@ pub fn generic_params_to_string(generics: &rustc_ast::Generics) -> String {
 }
 
 /// Converts the generic params to a string like `<'a, T, U>` containing only
-/// the names of each parameter (no bounds or defaults). Returns an empty
-/// string if there are no generic params.
+/// the names of each parameter (no bounds or defaults). 
+/// 
+/// Returns an empty string if there are no generic params.
 pub fn generic_args_to_string(generics: &rustc_ast::Generics) -> String {
     if generics.params.is_empty() {
         return String::new();
@@ -102,7 +106,8 @@ pub fn generic_args_to_string(generics: &rustc_ast::Generics) -> String {
     format!("<{}>", args.join(", "))
 }
 
-/// Converts a where clause to a string like ` where T: Clone, U: Send`.
+/// Converts a where clause to a string like `where T: Clone, U: Send`.
+/// 
 /// Returns an empty string if the where clause is empty.
 pub fn where_clause_to_string(generics: &rustc_ast::Generics) -> String {
     if generics.where_clause.predicates.is_empty() {
@@ -138,7 +143,7 @@ pub fn where_clause_to_string(generics: &rustc_ast::Generics) -> String {
     format!(" where {}", preds.join(", "))
 }
 
-/// gets the name of a parameter passed to some function
+/// Gets the name of a parameter passed to some function.
 // FIXME: I'm not sure why using pprust::pat_to_string(param.pat) instead causes a panic?
 pub fn get_param_name(param: &rustc_ast::Param) -> String {
     match param.pat.kind {
@@ -147,8 +152,9 @@ pub fn get_param_name(param: &rustc_ast::Param) -> String {
     }
 }
 
-/// Source for the inner-fn argument list: each TaggedRefMut formal forwards
-/// as `name.reborrow()`; everything else forwards as `name`.
+/// Constructs the inner-fn argument list.
+/// 
+/// Each TaggedRefMut formal forwards as `name.reborrow()`, everything else forwards as `name`.
 pub fn build_inner_call_args<'a>(params: impl Iterator<Item = &'a rustc_ast::Param>) -> String {
     params
         .map(|p| {
@@ -163,12 +169,12 @@ pub fn build_inner_call_args<'a>(params: impl Iterator<Item = &'a rustc_ast::Par
         .join(", ")
 }
 
-/// Generates bind statements for parameters against a site variable.
+/// Generates bind statements for input parameters against a site variable.
 ///
 /// Skips any formal whose `VariableDecl` in `ppt` is tagged
 /// `constant UNINITIALIZED`. At ENTER sites this is a no-op since formals
 /// have not yet been moved/dropped. At EXIT sites this drops the dead
-/// formals so we don't read moved-out values.
+/// formals so we don't report information regarding moved/dropped values.
 pub fn create_param_binds<'a>(
     site_name: &str,
     params: impl Iterator<Item = &'a rustc_ast::Param>,
@@ -197,8 +203,10 @@ pub fn create_param_binds<'a>(
         .collect()
 }
 
-/// Returns true iff `ppt`'s `VariableDecl` for `formal` is tagged
-/// `constant UNINITIALIZED`. Panics if the formal is missing from the ppt.
+/// Returns true iff `ppt`'s `VariableDecl` for some `formal` is tagged
+/// `constant UNINITIALIZED`. 
+/// 
+/// Panics if the formal is missing from the ppt.
 pub fn is_dead(ppt: &decls_gen::ProgramPoint, formal: &str) -> bool {
     ppt.var_decl(formal.to_string())
         .unwrap_or_else(|| {
@@ -210,8 +218,9 @@ pub fn is_dead(ppt: &decls_gen::ProgramPoint, formal: &str) -> bool {
         .is_uninit()
 }
 
-/// True if `ty`'s outer wrapper is `TaggedRefMut<...>`. Used by the wrapper
-/// to decide whether the formal needs a `.reborrow()` when forwarded to the
+/// Returns true if `ty`'s outer wrapper is `TaggedRefMut<...>`. 
+/// 
+/// Used by the wrapper to decide whether the formal needs a `.reborrow()` when forwarded to the
 /// inner fn. `TaggedRefMut` is move-only, but the binding still has to live
 /// for the EXIT-site binds.
 fn is_tagged_ref_mut(ty: &rustc_ast::Ty) -> bool {
