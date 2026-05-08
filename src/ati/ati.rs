@@ -1,4 +1,4 @@
-//! Core analysis state for dynamic abstract type inference.
+//! Analysis state for dynamic abstract type inference.
 //!
 //! Every type in this file is injected into the instrumented crate by
 //! `crate::callbacks::codegen::define_types`.
