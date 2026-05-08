@@ -29,7 +29,7 @@
 //!   implemented outside of rustc. When used as an index, they require a slightly
 //!   different operation to be emitted to push the range index operation down into the
 //!   `TaggedRef<[T]>` or `Tagged<[T; N]>` it acts on. See
-//!   [crate::callbacks::instrument::expr::addr_of] for more information.
+//!   `crate::callbacks::instrument::expr::addr_of` for more information.
 //!   Whenever the standard library is instrumented, it's possible this could be removed.
 //!
 //! As of 3/29/26, we are choosing to ignore uninstrumented libraries, meaning that

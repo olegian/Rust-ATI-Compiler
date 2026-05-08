@@ -1,23 +1,24 @@
 //! Defines functions to transform binary and unary operation expressions.
 //!
 //! In terms of value interaction tracking, there are three types of binary operations:
-//! 1. Logical operators (||, &&). These operators produce no interactions. If the operation is an
-//!    &&, then the lhs and rhs could evaluate to either a Tagged<bool> or raw bool, depending on
-//!    whether or not the lhs or rhs expression contains a let chain. If a let chain exists in
-//!    either side, then we must be in the top level of either an If or While condition. This means
-//!    it is safe to untuple any Tagged<bool>, as the overall binary expression evaluation will not
-//!    interact with any value.
-//! 2. Comparison operators (==, >, <=, etc...). These operators produce an interaction between the
-//!    lhs and rhs, and the resulting boolean is a new value which recieves a new Id.
-//! 3. Arithmatic operators (+, &, etc...). These operators produce an interaction between the
-//!    lhs, rhs, and the output. These operators rely on std::ops trait implementations to perform
+//! 1. Logical operators (`||`, `&&`). These operators produce no interactions. If the operation is
+//!    an `&&`, then the lhs and rhs could evaluate to either a `Tagged<bool>` or raw `bool`,
+//!    depending on whether or not the lhs or rhs expression contains a let chain. If a let chain
+//!    exists in either side, then we must be in the top level of either an `If` or `While`
+//!    condition. This means it is safe to untuple any `Tagged<bool>`, as the overall binary
+//!    expression evaluation will not interact with any value.
+//! 2. Comparison operators (`==`, `>`, `<=`, etc...). These operators produce an interaction
+//!    between the lhs and rhs, and the resulting boolean is a new value which receives a new Id.
+//! 3. Arithmetic operators (`+`, `&`, etc...). These operators produce an interaction between the
+//!    lhs, rhs, and the output. These operators rely on `std::ops` trait implementations to perform
 //!    both tag merging and value computation.
 //!
 //! For unary operators:
-//! 1. Deref could require reconstruction of a Tagged<T> from a TaggedRef(Mut?)<T>, if the first
-//!    pass determined it was necessary (see `./ders.rs` in [crate::callbacks::gather::analyze_hir]).
+//! 1. Deref could require reconstruction of a `Tagged<T>` from a `TaggedRef(Mut?)<T>`, if the first
+//!    pass determined it was necessary (see `./deref.rs` in
+//!    `crate::callbacks::gather::analyze_hir`).
 //! 2. Negation and logical not both just get pushed down into the contained value within the
-//!    Tagged<T>.
+//!    `Tagged<T>`.
 
 use rustc_ast::BinOpKind;
 use rustc_ast_pretty::pprust;
@@ -33,10 +34,10 @@ enum OpKind {
     Arithmetic,
 }
 
-/// Invoked whenever the visitor runs into a ExprKind::Binary.
+/// Invoked whenever the visitor runs into an `ExprKind::Binary`.
 ///
-/// Transforms `lhs op rhs` (both Tagged<T>) into a block that
-/// explicitly calls ATI_ANALYSIS to record the interaction and
+/// Transforms `lhs op rhs` (both `Tagged<T>`) into a block that
+/// explicitly calls `ATI_ANALYSIS` to record the interaction and
 /// constructs the result.
 pub fn transform_binary(visitor: &mut InstrumentingVisitor, binary_expr: &mut rustc_ast::Expr) {
     let rustc_ast::ExprKind::Binary(op, lhs, rhs) = &binary_expr.kind else {
@@ -109,11 +110,11 @@ pub fn transform_binary(visitor: &mut InstrumentingVisitor, binary_expr: &mut ru
     *binary_expr = parsing::parse_expr(visitor.psess, block_str);
 }
 
-/// Invoked whenever the visitor runs into a ExprKind::Unary.
+/// Invoked whenever the visitor runs into an `ExprKind::Unary`.
 ///
-/// Unary `*` on an instrumented &T/&mut T with tupleable T: post-
-/// instrumentation the operand is a TaggedRef(Mut?)<T>, and a plain `*`
-/// would strip the tag (TaggedRef::deref to &T). Rebuild a Tagged<T> from
+/// Unary `*` on an instrumented `&T` / `&mut T` with tupleable `T`: post-
+/// instrumentation the operand is a `TaggedRef(Mut?)<T>`, and a plain `*`
+/// would strip the tag (`TaggedRef::deref` to `&T`). Rebuild a `Tagged<T>` from
 /// the borrowed fields so the id travels with the value.
 pub fn transform_unary(visitor: &mut InstrumentingVisitor, unary_expr: &mut rustc_ast::Expr) {
     let rustc_ast::ExprKind::Unary(rustc_ast::UnOp::Deref, _) = &unary_expr.kind else {

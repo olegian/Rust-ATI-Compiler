@@ -1,15 +1,15 @@
-//! Defines a function to transform a range to the DATIRs range representation, using the
-//! runtime librarys `ATI::track_range*` calls.
+//! Defines a function to transform a range to DATIR's range representation, using the
+//! runtime library's `ATI::track_range*` calls.
 
 use rustc_ast_pretty::pprust;
 
 use crate::{callbacks::instrument::instrument::InstrumentingVisitor, callbacks::parsing};
 
-/// Invoked whenever the visitor runs into a ExprKind::Range.
+/// Invoked whenever the visitor runs into an `ExprKind::Range`.
 ///
 /// Transform range construction into a tracked-range constructor call.
-/// By this point walk_expr has already instrumented the endpoints (so
-/// literals/vars are Tagged<T>).
+/// By this point `walk_expr` has already instrumented the endpoints (so
+/// literals/vars are `Tagged<T>`).
 pub fn transform_range(visitor: &mut InstrumentingVisitor, range_expr: &mut rustc_ast::Expr) {
     let rustc_ast::ExprKind::Range(lo, hi, limits) = &range_expr.kind else {
         return;

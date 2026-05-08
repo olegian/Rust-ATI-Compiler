@@ -1,16 +1,16 @@
 //! Defines the type transformation function, [`recursively_transform_ast_type`], which
 //! tuples all types within some AST type, in place.
 //!
-//! Atomic primitive types (specified by [`CanBeTupled`]) become Tagged<T>'s.
-//! References to atomic primitive types become TaggedRef(Mut?)<T>s.
+//! Atomic primitive types (specified by [`CanBeTupled`]) become `Tagged<T>`'s.
+//! References to atomic primitive types become `TaggedRef(Mut?)<T>`s.
 //! References to references, and references to compound types are untouched.
-//! Arrays ([T; N]) become Tagged<[T; N]> (further recursively tupling the inner T).
-//! Tuples and other aggregate types simply recurse the transformation into each inner T.
+//! Arrays (`[T; N]`) become `Tagged<[T; N]>` (further recursively tupling the inner `T`).
+//! Tuples and other aggregate types simply recurse the transformation into each inner `T`.
 //!
-//! Slices are special cased somewhat. Because !Sized types can only be constructed behind a
+//! Slices are special cased somewhat. Because `!Sized` types can only be constructed behind a
 //! pointer, DATIR currently only supports slices that are stored behind references (as opposed
-//! to other pointer types, like Box/Arc/etc). A reference to a slice (&[T]) becomes TaggedRef<[T]>,
-//! after recursively tupling the inner type.
+//! to other pointer types, like `Box`/`Arc`/etc). A reference to a slice (`&[T]`) becomes
+//! `TaggedRef<[T]>`, after recursively tupling the inner type.
 
 use crate::callbacks::types::CanBeTupled;
 
@@ -86,7 +86,7 @@ pub fn recursively_transform_ast_type(target_ty: &mut rustc_ast::Ty) {
     }
 }
 
-/// Converts an atomic primitive type T to a Tagged<T> inplace.
+/// Converts an atomic primitive type `T` to a `Tagged<T>` in place.
 /// This is the base case op for the recursive tupling op.
 pub(super) fn transform_primitive(ty: &mut rustc_ast::Ty) {
     ty.kind = rustc_ast::TyKind::Path(

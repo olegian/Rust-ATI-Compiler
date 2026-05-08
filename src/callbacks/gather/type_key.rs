@@ -1,23 +1,27 @@
-//! Defines a namespace key for an impl-method's enclosing impl block that encodes
+//! Defines a namespace key for an impl-method's enclosing impl block, that encodes
 //! both the self-type and optionally the name of the trait being implemented.
 //!
-//! Both the self-ty and the trait paths are stored as fully qualified paths. This allows them
-//! to be used to consistently lookup specific function information stored within the [`FnIndex`],
-//! inside the [`FirstPassInfo`] struct passed between the first and second compilation.
+//! Both the self-type and the trait paths are stored as fully qualified paths. This allows them
+//! to be used to consistently lookup specific function information stored within the
+//! `FnIndex`, inside the
+//! [FirstPassInfo](crate::callbacks::gather::first_pass_info::FirstPassInfo) struct passed
+//! between the first and second compilation.
 //!
-//! [`TypeKey`]'s must be constructed from both AST and HIR information, which have different
+//! [TypeKey]s must be constructed from both AST and HIR information, which have different
 //! input information available regarding the specific impl block being considered, and use
-//! two different path representations. Therefore, use [`TypeKey::try_from_ast`] and
-//! [`TypeKey::try_from_hir`] appropriately, before passing the result to the [`FnIndex`].
+//! two different path representations. Therefore, use [TypeKey::try_from_ast] and
+//! [TypeKey::try_from_hir] appropriately, before passing the result to the
+//! `FnIndex`.
 
+/// A cross-compilation stable key representing a `(self_type, of_trait?)` pair.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct TypeKey {
-    /// ::-joined path of the impl's self type,
-    /// Generic args are dropped (impl Foo<u32> and impl<T> Foo<T>
+    /// `::`-joined path of the impl's self type,
+    /// Generic args are dropped (`impl Foo<u32>` and `impl<T> Foo<T>`
     /// both produce "Foo").
     pub self_path: String,
-    /// Some(path) for `impl Trait for T`, None for inherent impls. Same
-    /// ::-joined ident-only format as self_path.
+    /// `Some(path)` for `impl Trait for T`, `None` for inherent impls. Same
+    /// `::`-joined ident-only format as `self_path`.
     pub trait_path: Option<String>,
 }
 
@@ -31,7 +35,7 @@ impl std::fmt::Display for TypeKey {
 }
 
 impl TypeKey {
-    /// Constructor for non-trait based impls
+    /// Constructor for non-trait based impl blocks.
     pub fn inherent(self_path: impl Into<String>) -> Self {
         Self {
             self_path: self_path.into(),
@@ -39,7 +43,7 @@ impl TypeKey {
         }
     }
 
-    /// Constructor for trait based impls
+    /// Constructor for trait based impl blocks
     pub fn trait_impl(self_path: impl Into<String>, trait_path: impl Into<String>) -> Self {
         Self {
             self_path: self_path.into(),
@@ -101,9 +105,7 @@ impl TypeKey {
     }
 }
 
-//////// AST HELPERS //////////
-
-/// Canonical ::-joined string form of an AST path.
+/// Creates a canonical `::`-joined string form of an AST path.
 fn ast_path_canonical(path: &rustc_ast::Path) -> Option<String> {
     let mut parts = Vec::with_capacity(path.segments.len());
     for seg in path.segments.iter() {
@@ -112,7 +114,7 @@ fn ast_path_canonical(path: &rustc_ast::Path) -> Option<String> {
     Some(parts.join("::"))
 }
 
-// Canonicalizes a single segment of an AST path.
+/// Canonicalizes a single segment of an AST path.
 fn ast_segment_canonical(seg: &rustc_ast::PathSegment) -> Option<String> {
     let ident = seg.ident.name.to_string();
     let Some(args) = &seg.args else {
@@ -146,7 +148,7 @@ fn ast_segment_canonical(seg: &rustc_ast::PathSegment) -> Option<String> {
     }
 }
 
-// Canonicalizes an AST Path type name
+/// Canonicalizes an AST Path type name
 fn ast_ty_canonical(ty: &rustc_ast::Ty) -> Option<String> {
     if matches!(ty.kind, rustc_ast::TyKind::Infer) {
         panic!(
@@ -160,10 +162,8 @@ fn ast_ty_canonical(ty: &rustc_ast::Ty) -> Option<String> {
     ast_path_canonical(path)
 }
 
-//////// HIR HELPERS //////////
-
 /// HIR counterpart to `ast_path_canonical`. Creates a
-/// ::-joined ident<args> form string.
+/// `::`-joined `ident<args>` form string.
 ///
 /// Returns None on non-`AngleBracketed` args, associated-type
 /// constraints, const generic args, and non-path types as type args.
@@ -176,7 +176,7 @@ fn hir_path_canonical(path: &rustc_hir::Path<'_>) -> Option<String> {
     Some(parts.join("::"))
 }
 
-/// Gets the canonical representation of a single HIR path segment.
+/// Constructs the canonical representation of a single HIR path segment.
 fn hir_segment_canonical(seg: &rustc_hir::PathSegment<'_>) -> Option<String> {
     let ident = seg.ident.name.to_string();
     let Some(args) = seg.args else {
@@ -221,7 +221,7 @@ fn hir_segment_canonical(seg: &rustc_hir::PathSegment<'_>) -> Option<String> {
     }
 }
 
-/// Gets the canonical representation of this HIR type
+/// Constructs the canonical representation of a HIR type
 fn hir_ty_canonical(ty: &rustc_hir::Ty<'_>) -> Option<String> {
     let rustc_hir::TyKind::Path(rustc_hir::QPath::Resolved(_, path)) = ty.kind else {
         return None;

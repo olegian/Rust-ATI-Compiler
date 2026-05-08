@@ -1,10 +1,12 @@
-//! Defines how information about instrumented functions is transfered between the first
-//! and second compilation, via the [`FnIndex`] stored within [`FirstPassInfo`].
+//! Defines how information about which defined functions in the crate are instrumented is managed.
+//! 
+//! The [`FnIndex`] stored within [`super::FirstPassInfo`] acts as a registry of all functions
+//! that require transformation.
 //!
 //! The most important function of this index is to provide the Instrument pass with the
 //! `base_ppt_names` used to identify each ppt. At that point, there is no `ldid` available
 //! to perform a lookup from the decls file, therefore during the gather compilation we find
-//! all functions and identify thier location via the file name and module path. The Insturment
+//! all functions and identify their location via the file name and module path. The Instrument
 //! pass can then use that to find the appropriate `base_ppt_name`.
 //!
 //! Futher, there are multiple points where either pass needs to ask "is this function
@@ -13,7 +15,7 @@
 
 use crate::callbacks::gather::type_key::TypeKey;
 
-/// ::-joined module path matching `tcx.def_path_str` format.
+/// `::`-joined module path matching `tcx.def_path_str` format.
 /// `""` denotes the crate root.
 pub type ModPath = String;
 
@@ -27,13 +29,14 @@ pub enum FnNamespace<'a> {
     Method(&'a TypeKey),
 }
 
-/// One module's slice of the index. Free fns and methods live in separate
-/// maps because their natural key shapes differ, but namespace dispatch is
-/// funneled through `slot` / `slot_mut` so `FnIndex`'s public methods don't
-/// have to repeat the match.
+/// One module's slice of the index. 
+/// 
+/// Free fns and methods live in separate maps because their natural key shapes differ, 
+/// but namespace dispatch is still funneled through `slot` / `slot_mut` so `FnIndex`'s 
+/// public methods don't have to repeat the match.
 ///
-/// Important: using string keys (rather than `Symbol`) so entries are stable across the two
-/// compilation sessions.
+/// Important: using string keys (rather than rustc span `Symbol`s) so entries are stable across 
+/// the two compilation sessions.
 #[derive(Debug, Default)]
 struct ModEntry {
     free_fns: std::collections::HashMap<String, FnBasePptName>,
@@ -41,7 +44,7 @@ struct ModEntry {
 }
 
 impl ModEntry {
-    // Retreives a mapping of all functions defined within the input namespace.
+    /// Retreives a mapping of all functions defined within the input namespace.
     fn slot(&self, ns: FnNamespace) -> Option<&std::collections::HashMap<String, FnBasePptName>> {
         match ns {
             FnNamespace::Free => Some(&self.free_fns),
@@ -49,7 +52,9 @@ impl ModEntry {
         }
     }
 
-    // See [`ModEntry::slot`].
+    /// See `ModEntry::slot`.
+    /// 
+    /// This function always returns an entry, writing to this entry will update the slot.
     fn slot_mut(
         &mut self,
         ns: FnNamespace,
@@ -97,8 +102,9 @@ impl FnIndex {
         self.mods.get(mod_path)?.slot(ns)?.get(ident)
     }
 
-    /// Set of fn/method names defined in the `(mod_path, ns)` slot. Used by
-    /// stub generation to choose a non-clashing inner name.
+    /// Returns the set of fn/method names defined in the `(mod_path, ns)` slot. 
+    /// 
+    /// Used by the shim generation process to choose a non-clashing inner name.
     pub fn names_in(&self, mod_path: &str, ns: FnNamespace) -> std::collections::HashSet<String> {
         self.mods
             .get(mod_path)
@@ -107,7 +113,7 @@ impl FnIndex {
             .unwrap_or_default()
     }
 
-    /// Whether `def_id` was registered as a tracked function.
+    /// Returns true if the `def_id` was registered as a tracked function.
     pub fn contains(&self, def_id: &rustc_span::def_id::DefId) -> bool {
         self.by_def_id.contains(def_id)
     }

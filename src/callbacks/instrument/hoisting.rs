@@ -1,13 +1,13 @@
 //! Defines functions used by the [`InstrumentingVisitor`] to hoist statements, avoiding dropping
 //! temporary values while holding references to them.
 //!
-//! Because instrumentation inserts method calls on Tagged<T>s, some calls consume a
-//! temporary value and return an reference to it. This requires the temporary value to be bound
+//! Because instrumentation inserts method calls on `Tagged<T>`s, some calls consume a
+//! temporary value and return a reference to it. This requires the temporary value to be bound
 //! to a variable before the reference is constructed, to avoid dropping the value on exit from the
 //! method and creating a dangling reference.
 //!
 //! Invoking [`maybe_hoist_binding`] will take a statement, recurse into it to find all places
-//! a temporary is created before being passed to a ATI library function, and create multiple
+//! a temporary is created before being passed to an ATI library function, and create multiple
 //! statements out of the one, binding each temporary to a variable with a unique name.
 
 use crate::{callbacks::instrument::instrument::InstrumentingVisitor, callbacks::parsing};

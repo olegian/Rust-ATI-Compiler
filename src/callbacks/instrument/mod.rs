@@ -1,4 +1,5 @@
-//! Defines the callbacks used by the second compilation, the "Instrument" pass.
+//! Defines the callbacks ([`TransformAbstractSyntaxTreeCallbacks`]) used by the second 
+//! compilation, the "Instrument" pass.
 //!
 //! Under the hood, this file defines passes to run over the AST via the [`TransformingFileLoader`]
 //! so that every file being compiled gets properly instrumented, and not just the
@@ -8,7 +9,7 @@
 //! 1. Modify the existing AST to tuple all values, modify assignments, update type hints, etc,
 //!    such that value interactions are properly recorded.
 //! 2. Define new function shims to perform site management, associating formals, return values,
-//!    and globals with each ENTER and EXIT program point declared with the .decls file.
+//!    and globals with each ENTER and EXIT program point declared with the `.decls` file.
 //! 3. Generate necessary trait implementations for user-defined compound types.
 //! 4. Inject the runtime library into the crate root file, and import the root file in all
 //!    dependancy files to make all ATI-specific types and globals available everywhere within the
@@ -17,11 +18,13 @@
 //!    available for use.
 //!
 //! Steps 1-3 happen within the [`TransformingFileLoader`] constructed within the below `config`
-//! callback. Step 4 is split between the code generation step within the file loader (for all root
-//! imports within dependancies), and `after_crate_root_parsing` (to inject the runtime library)
-//! into the main file. Step 5 also takes place in `after_crate_root_parsing`.
+//! callback of [`TransformAbstractSyntaxTreeCallbacks`]. Step 4 is split between the code 
+//! generation step within the file loader (for all root imports within dependancies), and 
+//! `after_crate_root_parsing` (to inject the runtime library) into the main file. Step 5 also 
+//! takes place in `after_crate_root_parsing`.
 
 mod expr;
+mod file_loader;
 mod hoisting;
 mod instrument;
 mod item;
@@ -30,13 +33,13 @@ mod types;
 use crate::{
     callbacks::codegen::{self, define_types},
     callbacks::gather::first_pass_info::FirstPassInfo,
+    callbacks::instrument::file_loader::{Passes, TransformingFileLoader},
     callbacks::instrument::instrument::InstrumentingVisitor,
     config::DatirConfig,
-    file_loader::{Passes, TransformingFileLoader},
 };
 
 /// Crate-level attributes that must be injected into the root file to enable
-/// the unstable features used by the generated code.
+/// unstable features used by generated code.
 const REQUIRED_CRATE_ATTRIBUTES: &[&str] = &[
     "#![feature(min_specialization)]",
     "#![feature(step_trait)]",
@@ -93,7 +96,7 @@ impl rustc_driver::Callbacks for TransformAbstractSyntaxTreeCallbacks {
         )));
     }
 
-    /// Defines necessary types (namely Tagged<T>, but also globals like ATI_ANALYSIS)
+    /// Defines necessary types (namely `Tagged<T>`, but also globals like `ATI_ANALYSIS`)
     /// in the root file. All other files will import these types from the root.
     /// Further enables all necessary unstable features.
     fn after_crate_root_parsing(

@@ -5,7 +5,7 @@
 //! `SourceMap`'s `BytePos` interning, both of which are recreated each
 //! invocation. Most times, this will not cause a problem, as long as files are
 //! loaded in a consistent manner (which as of right now, they are). Before that
-//! was fixed however, span inconsistency caused problems which SpanKey fixed.
+//! was fixed however, span inconsistency caused problems which `SpanKey` addressed.
 //! For purely defensive reasons, this stable-keying functionality is left.
 //!
 //! `SpanKey` is a `(file, lo, hi)` triple computed by resolving
@@ -29,11 +29,11 @@ pub struct SpanKey {
     hi: u32,
 }
 
-/// A representation of a loaded file, whihc is consistent between separate compilations.
+/// A representation of a loaded file, which is consistent between separate compilations.
 ///
-/// Within rustc, a FileName can be represented in a variety of different ways, from
-/// `FileName::Real(_)`, which represents a real on-disk file, with a path to
-/// `FileName::Anon(_)`, a source string with no associated file, to `FileName::MacroExpansion(_)`
+/// Within rustc, a `FileName` can be represented in a variety of different ways, from
+/// `FileName::Real(_)`, which represents a real on-disk file, to
+/// `FileName::Anon(_)` a source string with no associated file, to `FileName::MacroExpansion(_)`
 /// which is the result of a generated macro body, which also doesn't have an associated file.
 ///
 /// `FileKey` is a consistent, simplified representation of all different file sources, capable

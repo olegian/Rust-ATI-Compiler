@@ -1,18 +1,18 @@
 //! Defines how path types are transformed.
 //!
-//! Path types can be primitives (like u32), however those types should have been properly handled
-//! already by the base case within [`recursively_transform_ast_type`]. Therefore, the belows
-//! function's job is to correctly apply the type tagging operation to all other Path types, which
-//! represent compound types.
+//! Path types can be primitives (like `u32`), however those types should have been properly
+//! handled already by the base case within [`recursively_transform_ast_type`]. Therefore, the
+//! below function's job is to correctly apply the type tagging operation to all other Path types,
+//! which represent compound types.
 //!
 //! A path to a type can be qualified (as in `dep::submod::MyType`), or imported/used and therefore
-//! simply refered to by the tail type (`MyType`). Further, any path segment can have generics
+//! simply referred to by the tail type (`MyType`). Further, any path segment can have generic
 //! types within it. These generics should further be recursively tupled (i.e. if there exists a
-//! function call like `foo<MyStruct<u32>>()`, the MyStruct<u32> type should be converted to
-//! MyStruct<Tagged<u32>>.
+//! function call like `foo<MyStruct<u32>>()`, the `MyStruct<u32>` type should be converted to
+//! `MyStruct<Tagged<u32>>`).
 //!
-//! All paths to range types are special cased by this file, converting a std::ops::Range to DATIRs
-//! Tagged<std::ops::Range> (with the other tag corresponding to the length of the range).
+//! All paths to range types are special cased by this file, converting a `std::ops::Range` to
+//! DATIR's `Tagged<std::ops::Range>` (with the other tag corresponding to the length of the range).
 //!
 //! See [`recursively_transform_ast_type`] for more information about tupling types.
 

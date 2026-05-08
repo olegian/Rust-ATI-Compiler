@@ -1,17 +1,17 @@
-//! Defines a function to transform a single AddrOf AST expression.
+//! Defines a function to transform a single `AddrOf` AST expression.
 //!
 //! If the first pass determined that this reference is being taken to a slice or array type
 //! that is being indexed by a range (`&array[a..b]`, `&slice[..]`, etc...) then use the
-//! runtime library's `.subslice` / `.subslice_mut` method call, to push the indexing operation
-//! down into the collections representation (for instance, into a TaggedRef<[T]>).
+//! runtime library's `.subslice()` / `.subslice_mut()` method call, to push the indexing operation
+//! down into the collection's representation (for instance, into a `TaggedRef<[T]>`).
 //!
-//! If the first pass determined that this reference is being taken to some tuplable type T,
+//! If the first pass determined that this reference is being taken to some tuplable type `T`,
 //! then use the runtime library's `.as_tagged_ref()` / `.as_tagged_ref_mut()` methods to convert
 //! the `Tagged<T>` into a `TaggedRef<T>` / `TaggedRefMut<T>`.
 
 use crate::{callbacks::instrument::instrument::InstrumentingVisitor, callbacks::parsing};
 
-/// Invoked whenever the visitor runs into a ExprKind::AddrOf
+/// Invoked whenever the visitor runs into an `ExprKind::AddrOf`.
 pub fn transform_addr_of(visitor: &mut InstrumentingVisitor, addr_of_expr: &mut rustc_ast::Expr) {
     let rustc_ast::ExprKind::AddrOf(_, mutbl, referent) = &mut addr_of_expr.kind else {
         panic!(

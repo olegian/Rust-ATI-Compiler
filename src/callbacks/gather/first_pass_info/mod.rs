@@ -2,7 +2,8 @@
 //! compilation, via the [`FirstPassInfo`] struct.
 //!
 //! The struct is composed of two well-typed pieces:
-//!   * [`FnIndex`], a registry of fns/methods that will be instrumented.
+//!   * [functions::FnIndex], a registry of functions and methods that will be instrumented, split
+//!     into namespaces.
 //!   * [`SpanFacts<F>`], generic span-keyed fact store. One field per kind of
 //!     syntactic fact pass 1 wants to communicate to pass 2. Markers (set
 //!     semantics) use `SpanFacts<()>`, while payload-bearing facts pick a struct for `F`.
@@ -52,11 +53,12 @@ pub struct FirstPassInfo {
     /// Calls to untracked functions, keyed by call-expression span.
     pub untracked_fn_calls: SpanFacts<UntrackedCall>,
 
-    /// Indexing expressions where a coercion from an array to a slice type
-    /// occurs and a `track_slice` needs to be inserted.
+    /// Indexing expressions where a range is used as the index. These are places where a 
+    /// `.subslice()` call must be inserted.
     pub index_by_range: SpanFacts<()>,
 
-    /// Spans of `Ref` expressions referring to a type T which is tupleable.
+    /// Spans of `Ref` expressions referring to a type T which is tupleable, which require a
+    /// `.as_tagged_ref()` call.
     pub ref_to_tupleable_ty: SpanFacts<()>,
 
     /// Spans of unary `*` expressions whose operand's type is `&T` / `&mut T`
@@ -65,16 +67,17 @@ pub struct FirstPassInfo {
     pub tag_stripping_deref: SpanFacts<()>,
 
     /// Spans of `Assign` / `AssignOp` whose LHS is `*expr` with `expr` typed
-    /// `&mut T` and `T` tupleable.
+    /// `&mut T` and `T` tupleable. These are places where a `.assign()` call must be used 
+    /// to write to both the value and Id places.
     pub assign_through_tagged_ref_mut: SpanFacts<()>,
 
     /// Spans of expressions whose post-instrumentation type is a
     /// `TaggedRefMut<T>`, i.e. their typeck-resolved (post-adjustment) type
     /// is `&mut T` with `T` tupleable. `TaggedRefMut` is move-only, so any
     /// pass-2 rewrite that consumes such an expression (binding it into
-    /// `let __ati_lhs = ...`, moving it into emitted args) must reborrow
-    /// instead, otherwise the original binding is invalidated for any use
-    /// later in the function. The reborrow is always semantically safe in
+    /// `let __ati_lhs = ...`, moving it into the emitted parameters of the inner function) must 
+    /// reborrow instead, otherwise the original binding is invalidated for any use
+    /// later in the function. The reborrow is always a semantically safe operation in an
     /// operand position.
     pub ref_mut_to_tupleable: SpanFacts<()>,
 }

@@ -66,7 +66,6 @@ mod ati;
 mod args;
 mod callbacks;
 mod config;
-mod file_loader;
 
 /// Errors produced by [`run`].
 #[derive(Debug)]

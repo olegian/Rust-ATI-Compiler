@@ -10,14 +10,14 @@ use crate::{
     callbacks::types::CanBeTupled,
 };
 
-/// Invoked whenever the visitor runs into a ExprKind::Lit
+/// Invoked whenever the visitor runs into an `ExprKind::Lit`.
 ///
 /// If lit type can be tupled (e.g. integer types):
-///       a --> ATI::track(a)
-/// type: T --> Tagged<T>
+///       a --> `ATI::track(a)`
+/// type: `T` --> `Tagged<T>`
 /// If lit cannot be tupled:
 ///       a --> a
-/// type: T --> Tagged<T>
+/// type: `T` --> `T`
 pub fn transform_literal(_visitor: &mut InstrumentingVisitor, lit_expr: &mut rustc_ast::Expr) {
     let rustc_ast::ExprKind::Lit(lit) = &mut lit_expr.kind else {
         panic!(

@@ -20,8 +20,8 @@ use crate::{callbacks::gather::analyze_hir::AnalyzeHirVisitor, callbacks::types:
 // In those places, a dereference operator should not strip off the tag.
 impl<'tcx, 'a> AnalyzeHirVisitor<'tcx, 'a> {
     /// If the dereference operator is being applied to a reference to some tuplable type,
-    /// then mark this expression as requiring tag-reconstruction to net a Tagged<T> as
-    /// opposed to a T.
+    /// then mark this expression as requiring tag-reconstruction to net a `Tagged<T>` as
+    /// opposed to a `T`.
     pub fn observe_deref(&mut self, expr: &rustc_hir::Expr) {
         let rustc_hir::ExprKind::Unary(rustc_hir::UnOp::Deref, inner) = expr.kind else {
             panic!("Called observe_deref with non-deref unary op: {:?}", expr);

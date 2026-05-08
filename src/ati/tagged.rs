@@ -40,15 +40,15 @@ impl Tagger {
 pub struct Tagged<T: ?Sized>(pub Id, pub T);
 
 /// A shared "view" over a tagged value: one borrow of the Id, one borrow of
-/// the inner value. Produced by instrumenting &x when x is (directly or
-/// transitively) a Tagged<..>. The T: ?Sized bound lets TaggedRef<'a, [T]>
+/// the inner value. Produced by instrumenting `&x` when `x` is (directly or
+/// transitively) a `Tagged<..>`. The `T: ?Sized` bound lets `TaggedRef<'a, [T]>`
 /// serve as the slice representation, with unsized coercion from
-/// TaggedRef<'a, [T; N]> via `CoerceUnsized`.
+/// `TaggedRef<'a, [T; N]>` via `CoerceUnsized`.
 ///
-/// Dereferences to T, which enables calling any &self method on T via
-/// auto-deref. Methods that would otherwise be hung off Tagged<T> (e.g. the
-/// slice `len()`) are declared directly on TaggedRef / TaggedRefMut since
-/// there is no single Tagged<T> value in memory to deref through.
+/// Dereferences to `T`, which enables calling any `&self` method on `T` via
+/// auto-deref. Methods that would otherwise be hung off `Tagged<T>` (e.g. the
+/// slice `.len()`) are declared directly on `TaggedRef` / `TaggedRefMut` since
+/// there is no single `Tagged<T>` value in memory to deref through.
 pub struct TaggedRef<'a, T: ?Sized>(pub &'a Id, pub &'a T);
 pub struct TaggedRefMut<'a, T: ?Sized>(pub &'a mut Id, pub &'a mut T);
 
@@ -91,7 +91,7 @@ impl<'a, T: ?Sized> TaggedRefMut<'a, T> {
         TaggedRefMut(self.0, f(self.1))
     }
 
-    /// Manual analog of Rust's implicit `&mut` reborrow. `TaggedRefMut` is
+    /// Manual analogue of Rust's implicit `&mut` reborrow. `TaggedRefMut` is
     /// move-only (must not be Copy/Clone to preserve unique-borrow
     /// semantics), so every value-position use of a `TaggedRefMut` binding
     /// other than the last needs `.reborrow()` where the source code would
@@ -128,7 +128,7 @@ impl<'a, T: ?Sized> Clone for TaggedRef<'a, T> {
 }
 impl<'a, T: ?Sized> Copy for TaggedRef<'a, T> {}
 
-/// Debug implementations for printing TaggedRef<T>s
+/// Debug implementations for printing `TaggedRef<T>`s.
 impl<'a, T: ?Sized + std::fmt::Debug> std::fmt::Debug for TaggedRef<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_tuple("TaggedRef")
@@ -185,7 +185,7 @@ pub type TaggedRangeFull = Tagged<std::ops::RangeFull>;
 /// allow for ranges to work as iterators, supporting all iterator methods.
 
 /// Getting the length (from types that have a length), should return a
-/// Tagged<usize>, with the Id of the outermost tag.
+/// `Tagged<usize>`, with the Id of the outermost tag.
 impl<T, const N: usize> TaggedArray<T, N> {
     pub fn len(&self) -> Tagged<usize> {
         Tagged(self.0, N)

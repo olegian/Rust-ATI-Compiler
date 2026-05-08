@@ -1,14 +1,14 @@
 //! Defines how references are transformed amidst the recursive tupling operation.
 //!
-//! A reference to an atomic primitive (&'a T) must become a TaggedRef<'a, T> (mutable, if
+//! A reference to an atomic primitive (`&'a T`) must become a `TaggedRef<'a, T>` (mutable, if
 //! necessary).
 //!
-//! A reference to a reference, or a reference to  a non-tuplable type T must remain unchanged.
+//! A reference to a reference, or a reference to a non-tuplable type `T` must remain unchanged.
 //!
-//! A reference to a slice must be converted to a TaggedRef<[T]>, with the inner type being
+//! A reference to a slice must be converted to a `TaggedRef<[T]>`, with the inner type being
 //! recursively tupled.
 //!
-//! See [`recursively_transform_ast_type`] for more information on reccursive tupling.
+//! See [`super::recursively_transform_ast_type`] for more information on recursive tupling.
 
 use rustc_ast_pretty::pprust;
 

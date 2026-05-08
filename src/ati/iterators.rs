@@ -1,27 +1,27 @@
 // Wrapper iterators for tagged slices/arrays.
 //
-// the standard libraries's slice/array iterators yield &(mut?)Tagged<T> / 
-// Tagged<T>, instead of  TaggedRef(Mut?)<T> / Tagged<T>. The below structs
+// The standard library's slice/array iterators yield `&(mut?)Tagged<T>` /
+// `Tagged<T>`, instead of `TaggedRef(Mut?)<T>` / `Tagged<T>`. The below structs
 // and Iterator implementation fix that.
 //
-// .enumerate() is special cased
+// `.enumerate()` is special cased
 //
 // FIXME:
-// - Sum<TaggedRef<T>> for Tagged<T> and Product analoges are needed
-//   for .sum() / .product() on these iterators 
-// - FromIterator<TaggedRef<T>> for ... is needed for .collect()
-// - .cloned() / .copied() std variants require
-//   Iterator<Item=&T> so don't apply to Item=TaggedRef<T>.
+// - `Sum<TaggedRef<T>>` for `Tagged<T>` and `Product` analogues are needed
+//   for `.sum()` / `.product()` on these iterators
+// - `FromIterator<TaggedRef<T>>` for ... is needed for `.collect()`
+// - `.cloned()` / `.copied()` std variants require
+//   `Iterator<Item=&T>` so don't apply to `Item=TaggedRef<T>`.
 // - enumerate-after-combinators need mechanism to
-//   thread length-id through .filter()/.map()/etc.
+//   thread length-id through `.filter()` / `.map()` / etc.
 
 use crate::ati::tagged::{Id, Tagged, TaggedRef, TaggedRefMut};
 
 // =================== SHIM ITERATORS ===================
 
-/// Iterator over a tagged slice/array, yielding TaggedRef<'a, T> per
-/// element. Created by .iter() on TaggedRef<[Tagged<T>]>,
-/// TaggedRef<[Tagged<T>; N]>, or &Tagged<[Tagged<T>; N]>.
+/// Iterator over a tagged slice/array, yielding `TaggedRef<'a, T>` per
+/// element. Created by `.iter()` on `TaggedRef<[Tagged<T>]>`,
+/// `TaggedRef<[Tagged<T>; N]>`, or `&Tagged<[Tagged<T>; N]>`.
 pub struct TaggedSliceIter<'a, T> {
     inner: std::slice::Iter<'a, Tagged<T>>,
     length_id: Id,
@@ -47,14 +47,14 @@ impl<'a, T> ExactSizeIterator for TaggedSliceIter<'a, T> {}
 impl<'a, T> std::iter::FusedIterator for TaggedSliceIter<'a, T> {}
 
 impl<'a, T> TaggedSliceIter<'a, T> {
-    /// Inherent override that shadows Iterator::enumerate
+    /// Inherent override that shadows [`Iterator::enumerate`].
     pub fn enumerate(self) -> TaggedEnumerate<Self> {
         let length_id = self.length_id;
         TaggedEnumerate { inner: self, count: 0, length_id }
     }
 }
 
-/// Mutable variant of TaggedSliceIter. Yields TaggedRefMut<'a, T>
+/// Mutable variant of [`TaggedSliceIter`]. Yields `TaggedRefMut<'a, T>`.
 pub struct TaggedSliceIterMut<'a, T> {
     inner: std::slice::IterMut<'a, Tagged<T>>,
     length_id: Id,
@@ -86,7 +86,7 @@ impl<'a, T> TaggedSliceIterMut<'a, T> {
     }
 }
 
-/// Owned iterator over a Tagged<[Tagged<T>; N]>, Yields each Tagged<T>
+/// Owned iterator over a `Tagged<[Tagged<T>; N]>`. Yields each `Tagged<T>`.
 pub struct TaggedArrayIntoIter<T, const N: usize> {
     inner: std::array::IntoIter<Tagged<T>, N>,
     length_id: Id,
@@ -118,9 +118,9 @@ impl<T, const N: usize> TaggedArrayIntoIter<T, N> {
     }
 }
 
-/// enumerate special casing, yields (Tagged<usize>, I::Item) where
-/// every index reuses the same length_id captured at construction. The
-/// counter itself is just a plain usize; only the value gets tagged.
+/// enumerate special casing, yields `(Tagged<usize>, I::Item)` where
+/// every index reuses the same `length_id` captured at construction. The
+/// counter itself is just a plain `usize`; only the value gets tagged.
 pub struct TaggedEnumerate<I> {
     inner: I,
     count: usize,

@@ -3,33 +3,36 @@
 //!
 //! Expression instrumentation heavily relies on the runtime library, the high-level goal is
 //! shaping the AST in such a way that allows using the runtime library to dynamically assign
-//! id's to values ("tupling", "tagging") and then rely on std::ops trait definitions to dispatch
-//! operations on the various Tagged types, which merge appropriate ids within an `ATI_ANALYSIS`
+//! id's to values ("tupling", "tagging") and then rely on `std::ops` traits to dispatch
+//! operations on the various `Tagged` types, which merge appropriate ids within an `ATI_ANALYSIS`
 //! global.
 //!
 //! Some expressions must be special-cased, or utilize facts gathered by the first
-//! compilation, stored within [crate::callbacks::gather::first_pass_info]. The facts are made available
-//! through the `visitor` parameter.
+//! compilation, stored within [crate::callbacks::gather::first_pass_info]. The facts are made 
+//! available through the `visitor` parameter provided to each function.
 //!
 //! Some key points:
-//! - Assign / AssignOp nodes: these nodes always evaluate to (). When assinging an owned value to
-//!   a variable which owns it's old value, the assignment works out of the box post-transformation.
-//!   When performing an assignment through a dereferenced mutable reference however, both the
-//!   value and the Id needs to be assigned to the referenced location. The first compilation
-//!   has already found all code locations where this kind of assignment happens, and the
-//!   assign expression will turn into a runtime library defined `TaggedRefMut::assign` method
-//!   call. This method will write to both. Further, the lhs of an assign operation is a "place"
-//!   expression, which needs to be instrumented differently than normal expressions. See
-//!   [`transform_lhs_place_expr`] below for more information.
-//! - Literals of type T are turned into Tagged<T> by dynamically assigning them a tag, via
+//! - `Assign` / `AssignOp` nodes: these nodes always evaluate to `()`. When assinging an owned 
+//!   value to a variable which owns it's old value, the assignment works out of the box 
+//!   post-transformation. When performing an assignment through a dereferenced mutable reference 
+//!   however, both the value and the Id needs to be assigned to the referenced location.
+//!   The first compilation has already found all code locations where this kind of assignment 
+//!   happens, and the assign expression will turn into a runtime library defined 
+//!   `TaggedRefMut::assign` method call. This method will write to both. Further, the lhs of an 
+//!   assign operation is a "place" expression, which needs to be instrumented differently than 
+//!   normal expressions. See [`transform_lhs_place_expr`] below for more information.
+//! - Literals of type `T` are turned into `Tagged<T>` by dynamically assigning them a tag, via
 //!   the runtime libraries `ATI::track(<lit>)`.
-//! - Arrays are tracked via the runtime libraries `ATI::track_array(<array>)`.
-//! - References (to tuplable primitives) are converted to TaggedRef / TaggedRefMuts via the
+//! - Arrays are tracked via the runtime libraries `ATI::track(<array>)`, this adds an
+//!   Id which corresponds to the length of the array expression.
+//! - References (to tuplable primitives) are converted to `TaggedRef` / `TaggedRefMuts` via the
 //!   `.as_tagged_ref()` defined within the runtime library.
 //! - Calls to uninstrumented method and function calls have thier inputs "untupled", and
 //!   return value tupled, if the call was found to return a tuplable value by the Gather pass.
 //! - If/While conditions are appropriately untupled, to have the condition evaluate to a boolean
-//!   after performing any merges required by the evaluation of the boolean itself.
+//!   after performing any merges required by the evaluation of the boolean itself. This requires
+//!   knowing if the condition has a let-pattern binding within it, via 
+//!   [common::contains_let_chain].
 
 use crate::callbacks::instrument::{instrument::InstrumentingVisitor, item::data_types};
 
@@ -200,7 +203,7 @@ pub fn transform_expr<'session>(
 ///
 /// This preserves place-ness so that the surrounding Assign / AssignOp remains
 /// well-formed for the borrow checker, while still instrumenting any value-context
-/// children (e.g. a Tagged<usize> index, or a `compute_ptr()` call inside `*..`).
+/// children (e.g. a `Tagged<usize>` index, or a `compute_ptr()` call inside `*..`).
 fn transform_lhs_place_expr<'session>(
     visitor: &mut InstrumentingVisitor<'session>,
     lhs: &mut rustc_ast::Expr,

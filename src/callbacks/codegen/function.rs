@@ -18,8 +18,8 @@
 //! used to then create an EXIT ppt, bind only the formals *which are live* at the exit of the
 //! original function, and the return value.
 //!
-//! The above example (also applying instrumentation to the original `foo`, and using some pseudocode)
-//! would cause the following functions to be generated:
+//! The above example (also applying instrumentation to the original `foo`, and using some
+//! pseudocode) would cause the following functions to be generated:
 //! ```rust
 //! fn foo(x: Tagged<u32>, y: SomeStruct, z: &SomeStruct) -> (Tagged<u32>, Tagged<f64>) {
 //!     let mut enter = ATI_ANALYSIS.get_site("foo:::ENTER");
@@ -46,17 +46,18 @@
 //! It is important that the shim function retains the name of the original function, so that
 //! every existing call to this function, calls the shim instead.
 //!
-//! Note that as `y` was an owned struct, it does not exist at the end of `foo`'s execution, therefore
-//! it is not bound to the exit site. Further note the return value, which is bound to the exit
-//! site.
+//! Note that as `y` was an owned struct, it does not exist at the end of `foo`'s execution,
+//! therefore it is not bound to the exit site. Further note the return value, which is bound to
+//! the exit site.
 //!
-//! `.bind` functionality is dependant on the `SiteBind` trait, defined within the runtime library
-//! (see `/src/ati/site_binds.rs`). Implementation of this trait on compound types will result in
-//! each recursive field being bound to the site, as a *separate variable*. It's for this reason,
-//! that all user-defined compound types have a SiteBind implementation dynamically generated.
-//! Calling `.bind` on an untracked type will cause a no-op, as there is no known information about
-//! that value. Calling `.bind` on a simple `Tagged<T>` (or reference variant), will only associate
-//! the single Id.
+//! `.bind()` functionality is dependent on the [SiteBind](crate::ati::site_binds::SiteBind)
+//! trait, defined within the runtime library. Implementation of this trait on compound types
+//! will result in each recursive field being bound to the site, as a *separate variable*. It's
+//! for this reason, that all user-defined compound types have a
+//! [SiteBind](crate::ati::site_binds::SiteBind) implementation dynamically generated. Calling
+//! `.bind()` on an untracked type will cause a no-op, as there is no known information about
+//! that value. Calling `.bind()` on a simple `Tagged<T>` (or reference variant), will only
+//! associate the single Id.
 //!
 //! If the original function does not return anything (or returns unit), then the return value is
 //! also ignored. If the original function is main, corresponding ENTER and EXIT sites are still

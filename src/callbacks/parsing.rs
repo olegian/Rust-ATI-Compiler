@@ -1,5 +1,5 @@
 //! Provides helper functions to construct rustc expressions/items/etc from Strings, used by
-//! [crate::callbacks::codegen], [crate::callbacks::instrument], and [crate::file_loader]
+//! [crate::callbacks::codegen], [crate::callbacks::instrument].
 
 /// Construct a rustc parser within the current parse session.
 fn create_parser<'a>(

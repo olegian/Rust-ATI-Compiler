@@ -1,5 +1,5 @@
-/// Defines all types used to perform dynamic ATI. 
-/// 
+/// Defines all types used to perform dynamic ATI.
+///
 /// Every type in this file is injected into the instrumented code by `codegen/define_types.rs`.
 ///
 /// Key points include:
@@ -14,10 +14,8 @@
 ///    instrumented file.
 /// 4. `struct UnionFind` - A simple union find data structure, with some classic rank
 ///    optimization.
-
 // FIXME: this file definitiely has some dead code somewhere, and can probably be
 // refactored to remove some functions.
-
 use crate::ati::tagged::{Id, Tagged, TaggedRef, TaggedRefMut, Tagger};
 
 /// Top-level global that owns all information about all value interactions
@@ -299,36 +297,11 @@ impl ATI {
         }
     }
 
-    /// Moves a value from a standard type T to a Tagged<T>,
+    /// Moves a value from a standard type `T` to a `Tagged<T>`,
     /// assigning it a unique Id
-    pub fn track<T>(value: T) -> Tagged<T>
-where {
+    pub fn track<T>(value: T) -> Tagged<T> {
         let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
         Tagged(id, value)
-    }
-
-    /// Wraps a raw array into a `Tagged<[E; N]>` with a fresh wrapper id corresponding
-    /// to the length. Note, the elements are NOT unified at this time,
-    /// as just being a part of the same array does not mean the elements
-    /// are intereacting together
-    pub fn track_array<T, const N: usize>(array: [T; N]) -> Tagged<[T; N]> {
-        let id = ATI_ANALYSIS.lock().unwrap().value_uf.make_set();
-        Tagged(id, array)
-    }
-
-    /// Borrow a tagged array as a `TaggedRef<[T]>`. Relies on `CoerceUnsized`
-    /// to convert `TaggedRef<[T; N]>` -> `TaggedRef<[T]>` at the return site.
-    pub fn track_slice<'a, T, const N: usize>(array: &'a Tagged<[T; N]>) -> TaggedRef<'a, [T]> {
-        TaggedRef(&array.0, &array.1)
-    }
-
-    /// Mutable borrow of a tagged array as a `TaggedRefMut<[T]>`. Splits the
-    /// `&mut Tagged<[T; N]>` into separate mutable borrows of the Id and array
-    /// fields, then relies on `CoerceUnsized` to unsize the array into a slice.
-    pub fn track_slice_mut<'a, T, const N: usize>(
-        array: &'a mut Tagged<[T; N]>,
-    ) -> TaggedRefMut<'a, [T]> {
-        TaggedRefMut(&mut array.0, &mut array.1)
     }
 
     pub fn track_range<T>(start: Tagged<T>, end: Tagged<T>) -> Tagged<std::ops::Range<Tagged<T>>> {

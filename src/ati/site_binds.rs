@@ -5,7 +5,7 @@ use crate::ati::tagged::{
 };
 
 /// Provides a method for recursively associating a variable `self` to some
-/// ATI site, with the given name. All Tagged<T>'s should implement this trait
+/// ATI site, with the given name. All `Tagged<T>`'s should implement this trait.
 /// Compound types have to add an implementation of this trait during compile
 /// time, to allow them to be bound to sites during runtime.
 /// The implementations below are required for the atomic/primitive types.
@@ -22,8 +22,8 @@ impl<T> SiteBind for T {
     default fn bind(&self, _site: &mut Site, _var_name: &str) {}
 }
 
-/// Most generic implementation used by all atomic tagged types (like Tagged<u32>).
-/// References to these values use TaggedRef / TaggedRefMut and bind the same
+/// Most generic implementation used by all atomic tagged types (like `Tagged<u32>`).
+/// References to these values use `TaggedRef` / `TaggedRefMut` and bind the same
 /// way (via the borrowed Id).
 impl<T> SiteBind for Tagged<T> {
     default fn bind(&self, site: &mut Site, var_name: &str) {

@@ -1,13 +1,13 @@
-//! Defines helper functions utilized by all other files in [crate::callbacks::instrument::expr].
+//! Defines helper functions utilized by all other files in `crate::callbacks::instrument::expr`.
 //!
-//! Namely this includes tupling and untupling operations, turning `expr` into ATI::track(`expr`),
+//! Namely this includes tupling and untupling operations, turning `expr` into `ATI::track(expr)`,
 //! or `Tagged(Id, expr)` into `Tagged(Id, expr).1` to retrieve the expression.
 //!
 //! Further, this file defines a function to recursively make all bindings `mut` within patterns,
-//! insert a reborrow operation ontop of some expression, and determine whether some condition
+//! insert a reborrow operation on top of some expression, and determine whether some condition
 //! expression contains a let-binding within it.
 
-/// Wraps an expression `e` of type T as `ATI::track(e)` of type Tagged<T> in place.
+/// Wraps an expression `e` of type `T` as `ATI::track(e)` of type `Tagged<T>` in place.
 pub fn tuple(expr: &mut rustc_ast::Expr) {
     let mut ati_track = rustc_ast::Expr::dummy();
     ati_track.kind = rustc_ast::ExprKind::Path(
@@ -27,15 +27,15 @@ pub fn tuple(expr: &mut rustc_ast::Expr) {
     expr.kind = rustc_ast::ExprKind::Call(Box::new(ati_track), [Box::new(inner)].into());
 }
 
-/// Takes a Tagged<T> expression and unwraps it to just T via `.1` field access in place.
+/// Takes a `Tagged<T>` expression and unwraps it to just `T` via `.1` field access in place.
 pub fn untuple(expr: &mut rustc_ast::Expr) {
     let inner = std::mem::replace(expr, rustc_ast::Expr::dummy());
     expr.kind = rustc_ast::ExprKind::Field(Box::new(inner), rustc_span::Ident::from_str("1"));
 }
 
-/// If `expr`'s span was marked by pass 1 as a `&mut T` (T tupleable), i.e.
-/// post-instrumentation it is a `TaggedRefMut<T>, rewrite it in place to
-/// `(<expr>).reborrow()` so any consumption (move into a binding, into
+/// If `expr`'s span was marked by pass 1 as a `&mut T` (`T` tupleable), i.e.
+/// post-instrumentation it is a `TaggedRefMut<T>`, rewrite it in place to
+/// `(expr).reborrow()` so any consumption (move into a binding, into
 /// emitted args, etc.) doesn't invalidate the original source binding.
 /// `TaggedRefMut` is move-only.
 pub fn reborrow_if_ref_mut(

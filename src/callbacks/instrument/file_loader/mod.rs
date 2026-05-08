@@ -15,7 +15,7 @@
 //! The [`TransformingFileLoader`] avoids this problem, allowing for AST-level modification of all
 //! compiled files, by constructing a "preliminary AST" before handing off any file rustc.
 //! This means the usual compilation pipeline of:
-//! ```
+//! ```text
 //! 1. File Loading
 //! 2. Source to AST
 //! 3. AST to HIR
@@ -23,7 +23,7 @@
 //! 5. ...
 //! ```
 //! instead becomes:
-//! ```
+//! ```text
 //! 1. File Loading --------------------
 //! 2. Source to AST           |  done by [`TransformingFileLoader`]
 //! 3. AST Transformation      |

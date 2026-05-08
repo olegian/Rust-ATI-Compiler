@@ -1,11 +1,12 @@
-//! Implements the runtime library's `SiteBind` trait for user-defined compound types.
+//! Implements the runtime library's [SiteBind](crate::ati::site_binds::SiteBind) trait for
+//! user-defined compound types.
 //!
 //! All values (of both atomic and compound types), must be able to be "bound" to sites. This
 //! ultimately just means recording the existing Id associated with some value that is stored
-//! within some variable, at a particular site. The SiteBind trait 
-//! (defined in `/src/ati/site_bind.rs`) governs this behavior. Following instrumentation, DATIR 
-//! generates SiteBind implementations for all user-defined compound types, so that they 
-//! recursively bind any tagged fields stored within them.
+//! within some variable, at a particular site. The [SiteBind](crate::ati::site_binds::SiteBind)
+//! trait governs this behavior. Following instrumentation, DATIR generates
+//! [SiteBind](crate::ati::site_binds::SiteBind) implementations for all user-defined compound
+//! types, so that they recursively bind any tagged fields stored within them.
 //!
 //! To see an example of how this is actually used by shim functions, look at
 //! [crate::callbacks::codegen::function].

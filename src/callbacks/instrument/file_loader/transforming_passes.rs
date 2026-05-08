@@ -14,7 +14,8 @@
 /// the [super::TransformingFileLoader].
 /// 
 /// `module_path` is the Rust module path derived from the file being processed
-/// (e.g., `""` for root, `"dep"` for `dep.rs`). View [crate::file_loader::files] for more
+/// (e.g., `""` for root, `"dep"` for `dep.rs`). View 
+/// [crate::callbacks::instrument::file_loader::files] for more
 /// information.
 type Pass =
     Box<dyn Fn(&rustc_session::parse::ParseSess, &mut rustc_ast::Crate, &str) + Send + Sync>;
