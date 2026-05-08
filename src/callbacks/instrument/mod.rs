@@ -82,7 +82,7 @@ impl rustc_driver::Callbacks for TransformAbstractSyntaxTreeCallbacks {
                 rustc_ast::mut_visit::MutVisitor::visit_crate(&mut visitor, &mut krate);
 
                 // create all required function stubs, which perform site management
-                codegen::generate_stubs(&datir_config, &first_pass, krate, module_path, psess);
+                codegen::generate_shims(&datir_config, &first_pass, krate, module_path, psess);
             },
         ));
 

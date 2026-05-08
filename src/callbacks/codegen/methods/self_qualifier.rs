@@ -1,17 +1,17 @@
-//! Visitor which qualifies all associated type references to include the name of the trait
+//! Qualifies all associated type references via a visitor to include the name of the trait
 //! which contains the associated type.
 //!
 //! See [crate::callbacks::codegen::methods] for more information on method shims.
 
-/// In-place mut visitor that rewrites every Self::X path in
+/// In-place mut visitor that rewrites every `Self::X` path in
 /// signature types, body expressions, and body patterns into the
-/// fully-qualified form <Self as Trait>::X.
+/// fully-qualified form `<Self as Trait>::X`.
 pub struct SelfPathQualifier<'a> {
     pub trait_segs: &'a [rustc_ast::PathSegment],
 }
 
 impl<'a> SelfPathQualifier<'a> {
-    /// rewrite a path segment, if it accesses an associated type via Self
+    /// Rewrites a path segment, if it accesses an associated type via `Self`
     fn maybe_rewrite(&self, qself: &mut Option<Box<rustc_ast::QSelf>>, path: &mut rustc_ast::Path) {
         if qself.is_some() || path.segments.len() < 2 {
             return;
@@ -60,6 +60,7 @@ impl<'a> SelfPathQualifier<'a> {
 /// Self paths could be in types, expressions, or patterns.
 /// Make sure to visit all of them.
 impl<'a> rustc_ast::mut_visit::MutVisitor for SelfPathQualifier<'a> {
+    /// Rewrites `Self` types.
     fn visit_ty(&mut self, ty: &mut rustc_ast::Ty) {
         if let rustc_ast::TyKind::Path(qself, path) = &mut ty.kind {
             self.maybe_rewrite(qself, path);
@@ -67,6 +68,7 @@ impl<'a> rustc_ast::mut_visit::MutVisitor for SelfPathQualifier<'a> {
         rustc_ast::mut_visit::walk_ty(self, ty);
     }
 
+    /// Rewrites `Self` type paths in exprs.
     fn visit_expr(&mut self, expr: &mut rustc_ast::Expr) {
         if let rustc_ast::ExprKind::Path(qself, path) = &mut expr.kind {
             self.maybe_rewrite(qself, path);
@@ -74,6 +76,7 @@ impl<'a> rustc_ast::mut_visit::MutVisitor for SelfPathQualifier<'a> {
         rustc_ast::mut_visit::walk_expr(self, expr);
     }
 
+    /// Rewrites `Self` type paths in patterns.
     fn visit_pat(&mut self, pat: &mut rustc_ast::Pat) {
         if let rustc_ast::PatKind::Path(qself, path) = &mut pat.kind {
             self.maybe_rewrite(qself, path);

@@ -19,26 +19,26 @@ pub mod define_types;
 mod function;
 mod methods;
 
-/// For each fn/method in the crate (recursing into inline submodules),
-/// modifies the body of the function to create enter and exit sites
-/// with input parameters bound to each. The new body will then invoke
-/// an "inner" function, which holds the actual function logic. This
-/// inner function is also generated, with a non-colliding name and
-/// matching trait constraints/generics.
+/// For each fn/method in the crate, modifies the body of the function to create 
+/// to manage ENTER and EXIT sites. 
+/// 
+/// The new body will then invoke a new "inner" function, which holds the actual function logic. 
+/// This inner function is also created with a non-colliding name (with respect to the namespace
+/// it resides in) and matching trait constraints/generics.
 ///
-/// For each user-defined compound types, also generates a SiteBind impl,
+/// For each user-defined compound types, further generates a SiteBind impl,
 /// to allow associating the compound type's leaves with a site.
 ///
-/// module_path is the file-derived Rust module path ("" for the crate
+/// Recurses into submodules. `module_path`` is the file-derived Rust module path ("" for the crate
 /// root, "dep" for a non-root file).
-pub fn generate_stubs(
+pub fn generate_shims(
     datir_config: &DatirConfig,
     first_pass: &FirstPassInfo,
     krate: &mut rustc_ast::Crate,
     module_path: &str,
     psess: &rustc_session::parse::ParseSess,
 ) {
-    generate_stubs_in_mod(
+    generate_shims_in_mod(
         datir_config,
         first_pass,
         &mut krate.items,
@@ -47,9 +47,10 @@ pub fn generate_stubs(
     );
 }
 
-/// Recursive worker for generate_stubs. Walks one module's items at
-/// mod_path, recursing into ItemKind::Mod with mod_path::sub_name.
-fn generate_stubs_in_mod(
+/// Recursive worker for generate_shims. 
+/// 
+/// Walks one module's items at mod_path, recursing into ItemKind::Mod with mod_path::sub_name.
+fn generate_shims_in_mod(
     datir_config: &DatirConfig,
     first_pass: &FirstPassInfo,
     items: &mut thin_vec::ThinVec<Box<rustc_ast::Item>>,
@@ -125,7 +126,7 @@ fn generate_stubs_in_mod(
                 } else {
                     format!("{mod_path}::{}", mod_ident.as_str())
                 };
-                generate_stubs_in_mod(datir_config, first_pass, sub_items, &sub_mod_path, psess);
+                generate_shims_in_mod(datir_config, first_pass, sub_items, &sub_mod_path, psess);
             }
 
             _ => {}
