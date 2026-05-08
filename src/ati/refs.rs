@@ -7,7 +7,7 @@
 //! id and the values is not contiguous in memory.
 //!
 //! [TaggedRef] is shared and `Copy`. [TaggedRefMut] is unique and must not be `Copy` or
-//! `Clone`, so pass 2 emits explicit [TaggedRefMut::reborrow] calls anywhere the source code
+//! `Clone`, so pass 2 emits explicit [Reborrow::reborrow] calls anywhere the source code
 //! would have relied on the compiler's implicit `&mut` reborrow.
 
 use crate::ati::tagged::{Id, TagTuple, Tagged};
@@ -28,7 +28,7 @@ pub struct TaggedRef<'a, T: ?Sized>(pub &'a Id, pub &'a T);
 /// Unique-borrow variant of [TaggedRef]. Holds one mutable borrow of the id and one mutable
 /// borrow of the inner value.
 ///
-/// Move-only by construction. Pass 2 inserts an explicit [TaggedRefMut::reborrow] call
+/// Move-only by construction. Pass 2 inserts an explicit [Reborrow::reborrow] call
 /// anywhere the source code would have relied on Rust's implicit `&mut` reborrow.
 pub struct TaggedRefMut<'a, T: ?Sized>(pub &'a mut Id, pub &'a mut T);
 
