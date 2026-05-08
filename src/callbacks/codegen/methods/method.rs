@@ -18,14 +18,16 @@ use crate::{
     config::DatirConfig,
 };
 
+/// For a single method, generates the appropriate shim.
+/// 
 /// Replaces a single impl-item's method body with a stub that opens
 /// ENTER/EXIT sites and calls a freshly-named inner method, and pushes
 /// the corresponding inner-method template + the original body onto
 /// the caller's accumulators. Non-fn associated items are skipped.
 ///
 /// The trait_segs argument carries the trait reference's path segments
-/// for trait impls; if Some, every Self::X path within the method's
-/// signature and body is rewritten to its <Self as Trait>::X form so
+/// for trait impls; if Some, every `Self::X` path within the method's
+/// signature and body is rewritten to its `<Self as Trait>::X` form so
 /// the generated inherent inner-impl can resolve associated items.
 pub fn generate_method_shim(
     datir_config: &DatirConfig,
@@ -136,7 +138,8 @@ pub fn generate_method_shim(
     *body = Some(new_block);
 }
 
-/// Source for an inner method, the signature with an empty placeholder body.
+/// Source for an inner method signature with an empty placeholder body.
+/// 
 /// The caller parses this template, then transplants the user's original body.
 fn build_inner_method_template(
     inner_name: &str,
@@ -186,7 +189,8 @@ fn build_inner_method_template(
     format!("fn {inner_name}{generic_params}({declared}){ret}{where_clause} {{ }}")
 }
 
-/// Body for a method's shim, in the single-exit-site flow.
+/// Constructs the body for a method's shim. 
+/// 
 /// A small difference from the free-fn version: the self parameter needs to
 /// be correctly forwarded when invoking the inner method. The receiver is
 /// bound under the name `"self"`, and is filtered by liveness in the same way
@@ -296,6 +300,8 @@ enum ReceiverKind {
     RefMut,
 }
 
+/// Constructs a [`ReceiverKind`], based off the input parameter list.
+///  
 /// Determines whether a list of parameters being passed to some
 /// function or method accepts self, &self, &mut self.
 fn determine_receiver_kind(params: &[rustc_ast::Param]) -> ReceiverKind {
