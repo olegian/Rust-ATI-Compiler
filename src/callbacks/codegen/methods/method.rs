@@ -303,7 +303,7 @@ enum ReceiverKind {
 /// Constructs a [`ReceiverKind`], based off the input parameter list.
 ///  
 /// Determines whether a list of parameters being passed to some
-/// function or method accepts self, &self, &mut self.
+/// function or method accepts `self`, `&self`, `&mut self`.
 fn determine_receiver_kind(params: &[rustc_ast::Param]) -> ReceiverKind {
     let Some(first) = params.first() else {
         return ReceiverKind::None;
