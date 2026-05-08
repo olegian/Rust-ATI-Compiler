@@ -143,7 +143,8 @@ impl Site {
             // };
             let var = var.replace('\\', "\\\\").replace(' ', "\\_");
 
-            writeln!(output, "var {} {}", var, tag).unwrap();
+            let leader = self.type_uf.find(tag).unwrap();
+            writeln!(output, "var {} {}", var, leader).unwrap();
         }
     }
 }
