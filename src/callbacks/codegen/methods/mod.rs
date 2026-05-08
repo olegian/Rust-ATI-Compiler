@@ -29,6 +29,9 @@ use crate::{
 mod method;
 mod self_qualifier;
 
+
+/// Generates all shims for all methods defined within a single impl block.
+/// 
 /// Walks the methods within an impl block, replacing each method body with a
 /// stub that opens ENTER/EXIT sites and calls a freshly-named inner method.
 /// All inner methods are gathered into a single new impl block (carrying the
